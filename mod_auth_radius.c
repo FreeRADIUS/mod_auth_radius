@@ -1,5 +1,5 @@
 /* ====================================================================
- * Copyright (c) 1997-1998 The Apache Group.  All rights reserved.
+ * Copyright (c) 1997-1999 The Apache Group.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -48,11 +48,13 @@
  * For more information on the Apache Group and the Apache HTTP server
  * project, please see <http://www.apache.org/>.
  *
+ *
+ *  CVS $Id$
  */
 
 /*
-  Version 1.3.1, Jul 20, 1998, by Alan DeKok <alan@cryptocard.com>
-                                              www.cryptocard.com
+  Version 1.3.9, Nov. 1999, by Alan DeKok <alan@freeradius.org>
+  for CRYPTOCard Inc.          http://www.cryptocard.com/
 
   Everyone wants strong authentication over the web.  For us, this means
   RADIUS.
@@ -69,23 +71,6 @@
 
   Also, do NOT have your RADIUS server visible to the external world.
   Doing so makes all kinds of attacks possible.
-
-  **************************************************
-  
-  Add to Configuration file BEFORE mod_auth.o:
-  Module radius_auth_module    mod_auth_radius.o
-  
-  Add to server configuration file:
-  AddRadiusAuth <server>[:port] <secret> [<seconds>]
-  AddRadiusCookieValid <minutes>
-  AddModule modules/extra/mod_auth_radius.o              (for 1.3.x)
-  
-
-  Add to directory configuration:
-  AuthRadiusAuthoritative on
-  AuthRadiusCookieValid <minutes>
-
-  **************************************************
 
   Adding mod_auth_radius to the Configuration file before mod_auth
   allows you to have mod_auth_radius authoritative by default, but NOT
@@ -278,6 +263,7 @@
 module radius_auth_module;
 
 /* define DEBUG_RADIUS for lots of status messages */
+#define DEBUG_RADIUS
 #ifdef DEBUG_RADIUS
 #define DPRINTF printf
 #else
@@ -532,7 +518,7 @@ verify_packet(request_rec *r, radius_packet_t *packet, unsigned char vector[RADI
   return 0;
 }
 static void
-add_attribute(radius_packet_t *packet, int type, unsigned char *data, int length)
+add_attribute(radius_packet_t *packet, int type, const unsigned char *data, int length)
 {
   attribute_t *p;
 
@@ -546,7 +532,7 @@ add_attribute(radius_packet_t *packet, int type, unsigned char *data, int length
 #define COOKIE_SIZE 1024
 /* make a cookie based on secret + public information */
 static char *
-make_cookie(request_rec *r, time_t expires, char *passwd, char *string)
+make_cookie(request_rec *r, time_t expires, const char *passwd, const char *string)
 {
   char one[COOKIE_SIZE], two[COOKIE_SIZE];
   char *cookie = palloc(r->pool, COOKIE_SIZE);
@@ -608,7 +594,7 @@ make_cookie(request_rec *r, time_t expires, char *passwd, char *string)
   return cookie;
 }
 static int
-valid_cookie(request_rec *r, char *cookie, char *passwd)
+valid_cookie(request_rec *r, const char *cookie, const char *passwd)
 {
   time_t expires, now;
 
@@ -651,7 +637,7 @@ add_cookie(request_rec *r, table *header, char *cookie, time_t expires)
 static char *
 spot_cookie(request_rec *r)
 {
-  char *cookie;
+  const char *cookie;
   char *value;
 
   if ((cookie = table_get (r->headers_in, "Cookie"))) {
@@ -674,7 +660,7 @@ spot_cookie(request_rec *r)
 static int
 radius_authenticate(request_rec *r, radius_server_config_rec *scr, 
 		    int sockfd, int code, char *recv_buffer,
-		    char *user, char *passwd_in, char *state, 
+		    const char *user, const char *passwd_in, const char *state, 
 		    unsigned char *vector, char *errstr)
 {
   struct sockaddr_in *sin;
@@ -843,7 +829,7 @@ find_attribute(radius_packet_t *packet, unsigned char type)
 
 /* authentication module utility functions */
 static int
-check_pw(request_rec *r, radius_server_config_rec *scr, char *user, char *passwd_in, char *state, char *message, char *errstr)
+check_pw(request_rec *r, radius_server_config_rec *scr, const char *user, const char *passwd_in, const char *state, char *message, char *errstr)
 {
   struct sockaddr_in *sin;
   struct sockaddr salocal;
@@ -993,7 +979,7 @@ authenticate_basic_user(request_rec *r)
   radius_server_config_rec *scr = (radius_server_config_rec *)
     get_module_config (s->module_config, &radius_auth_module);
   conn_rec *c = r->connection;
-  char *sent_pw;
+  const char *sent_pw;
   char errstr[MAX_STRING_LEN];
   int res, min;
   char *cookie;
@@ -1086,10 +1072,12 @@ authenticate_basic_user(request_rec *r)
   return OK;
 }
     
+#if 0
 static int check_user_access(request_rec *r)
 {
   return OK;
 }
+#endif
 
 module radius_auth_module = {
    STANDARD_MODULE_STUFF,
@@ -1102,7 +1090,11 @@ module radius_auth_module = {
    NULL,			/* handlers */
    NULL,			/* filename translation */
    authenticate_basic_user,	/* check_user_id */
+#if 0
    check_user_access,  		/* check auth */
+#else
+   NULL,
+#endif
    NULL,			/* check access */
    NULL,			/* type_checker */
    NULL,			/* fixups */
