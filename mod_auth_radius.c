@@ -236,13 +236,17 @@
   Version History
   ===============
 
-  1.5.3 Integrated code from http://www.wede.de/sw/mod_auth_radius/
-        which had forked form this one after v1.3.3.
+  1.5.3 Bug fix from Bryan Stansell <bryan@stansell.org>, to set
+        the right data element for the AddRadiusCookieValid configuration
+	item.
 
   1.5.2 Updates for NAS-Identifier and NAS-IP-Address, based on ideas
         from Adrian Hosey <ahosey@systhug.com>.  The NAS-Identifier is
 	the virtual server host name, and the NAS-IP-Address is the
 	IP address of the base server.
+
+	Also integrated code from http://www.wede.de/sw/mod_auth_radius/
+        which had forked form this one after v1.3.3.
 
   1.5.1 Quick release, for bug found by f.garosi@usl7.toscana.it.
 
@@ -487,6 +491,9 @@ add_auth_radius(cmd_parms *cmd, void *mconfig,
   return NULL;			/* everything's OK */
 }
 
+/*
+ *  Set the local address to which this client is bound.
+ */
 static const char *
 set_bind_address (cmd_parms *cmd, void *mconfig, char *arg)
 {
@@ -501,6 +508,20 @@ set_bind_address (cmd_parms *cmd, void *mconfig, char *arg)
   return NULL;
 }
 
+/*
+ *  Set the cookie valid time.
+ */
+static const char *
+set_cookie_valid(cmd_parms *cmd, void *mconfig, char *arg)
+{
+  radius_server_config_rec *scr;
+
+  scr = get_module_config(cmd->server->module_config,
+			  &radius_auth_module);
+  scr->timeout = atoi(arg);
+  return NULL;			/* everything's OK */
+}
+
 static const char *
 set_int_slot (cmd_parms *cmd, char *struct_ptr, char *arg)
 {
@@ -512,30 +533,28 @@ set_int_slot (cmd_parms *cmd, char *struct_ptr, char *arg)
 /* Table of which command does what */
 static command_rec auth_cmds[] = {
   { "AddRadiusAuth", add_auth_radius, NULL, RSRC_CONF, TAKE23,
-    "radius server name:port,  shared secret, and optional timeout" },
+    "per-server configuration for RADIUS server name:port,  shared secret, and optional timeout" },
   
   { "AuthRadiusBindAddress", set_bind_address, NULL, RSRC_CONF, TAKE1,
-    "bind client (local) socket to this local IP address" },
+    "per-server binding local socket to this local IP address.  RADIUS requests will be sent *from* this IP address." },
 
-  { "AddRadiusCookieValid", set_int_slot, 
-    (void*)XtOffsetOf(radius_server_config_rec, timeout), 
-    RSRC_CONF, TAKE1,
-    "time in minutes that the returned cookie is valid for.  After this time, authentication will be requested again.  Use '0' for forever." }, 
+  { "AddRadiusCookieValid", set_cookie_valid, NULL, RSRC_CONF, TAKE1,
+    "per-server time in minutes for which the returned cookie is valid.  After this time, authentication will be requested again.  Use '0' for forever." }, 
 
   { "AuthRadiusAuthoritative", set_flag_slot,
     (void*)XtOffsetOf(radius_dir_config_rec, authoritative), 
     OR_AUTHCFG, FLAG, 
-    "Set to 'no' to allow access control to be passed along to lower modules if the UserID is not known to this module" },
+    "per-directory access on failed authentication.  If set to 'no', then access control is passed along to lower modules on failed authentication." },
 
   { "AuthRadiusCookieValid", set_int_slot, 
     (void*)XtOffsetOf(radius_dir_config_rec, timeout), 
     OR_AUTHCFG, TAKE1,
-    "time in minutes that the returned cookie is valid for.  After this time, authentication will be requested again.  Use '0' for forever." }, 
+    "per-directory time in minutes for which the returned cookie is valid.  After this time, authentication will be requested again.  Use '0' for forever." }, 
   
   { "AuthRadiusActive", set_flag_slot,
     (void*)XtOffsetOf(radius_dir_config_rec, active),
     OR_AUTHCFG, FLAG,
-    "Toggle the use of RADIUS authentication at this Location" },
+    "per-directory toggle the use of RADIUS authentication." },
 
   { NULL }
 };
