@@ -53,7 +53,7 @@
  */
 
 /*
-  Version 1.3.9, Nov. 1999, by Alan DeKok <alan@freeradius.org>
+  Version 1.5.0, Nov. 1999, by Alan DeKok <alan@freeradius.org>
   for CRYPTOCard Inc.          http://www.cryptocard.com/
 
   Everyone wants strong authentication over the web.  For us, this means
@@ -880,17 +880,16 @@ check_pw(request_rec *r, radius_server_config_rec *scr, const char *user, const 
     {
       
     case RADIUS_ACCESS_ACCEPT:
-#if 0
       {
 	attribute_t *a_timeout;
 	int i;
 
 	a_timeout = find_attribute(packet, RADIUS_SESSION_TIMEOUT);
 	if (a_timeout) {
-	  i = ntohl((int *) a_timeout->data);
+	  memcpy(&i, a_timeout->data, 4);
+	  i = ntohl(i);
 	}
       }
-#endif
       *message = 0;		/* no message */
       return TRUE;		/* he likes you! */
       break;
@@ -1032,8 +1031,12 @@ authenticate_basic_user(request_rec *r)
     DPRINTF("No cookie found.  Trying RADIUS authentication.\n");
   }
 
-  /* This is for one-time passwords, so we don't get too badly out of sync */
-  if (stat(r->filename, &buf) < 0) {
+  /*
+   *  This is for one-time passwords, so we don't get too badly out of sync .
+   *  Also, don't bother doing the stat for requests we're proxying.
+   */
+  if ((strstr(r->filename, "proxy:") != r->filename) &&
+      (stat(r->filename, &buf) < 0) {
     return HTTP_NOT_FOUND; /* can't stat it, so we can't authenticate it */
   }
 
@@ -1072,13 +1075,6 @@ authenticate_basic_user(request_rec *r)
   return OK;
 }
     
-#if 0
-static int check_user_access(request_rec *r)
-{
-  return OK;
-}
-#endif
-
 module radius_auth_module = {
    STANDARD_MODULE_STUFF,
    NULL,			/* initializer */
@@ -1090,11 +1086,7 @@ module radius_auth_module = {
    NULL,			/* handlers */
    NULL,			/* filename translation */
    authenticate_basic_user,	/* check_user_id */
-#if 0
-   check_user_access,  		/* check auth */
-#else
-   NULL,
-#endif
+   NULL,			/* check auth */
    NULL,			/* check access */
    NULL,			/* type_checker */
    NULL,			/* fixups */
