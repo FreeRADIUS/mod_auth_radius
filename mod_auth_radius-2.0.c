@@ -794,7 +794,7 @@ radius_authenticate(request_rec *r, radius_server_config_rec *scr,
   int password_len, i;
   unsigned char password[128];
   apr_md5_ctx_t md5_secret, my_md5;
-  u_int32_t service;
+  uint32_t service;
 
   unsigned char send_buffer[RADIUS_PACKET_SEND_SIZE];
   radius_packet_t *packet = (radius_packet_t *) send_buffer;
@@ -1102,7 +1102,7 @@ void
 note_challenge_auth_failure(request_rec *r, char *user, char *message)
 {
     if (!*message) {		/* no message to print */
-      / *note_basic_auth_failure(r); */
+      /* note_basic_auth_failure(r); */
     } else {			/* print our magic message */
       apr_table_set (r->err_headers_out, "WWW-Authenticate",
 		 apr_pstrcat(r->pool, "Basic realm=\"", ap_auth_name(r), " for ", user, " '", message, "'", NULL));
