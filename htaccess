@@ -1,0 +1,45 @@
+######################################################################
+#
+#  A sample per-directory access-control configuration, to be used
+#  as a '.htacces' file.
+#
+
+#
+# Use basic password authentication.
+# AuthType Digest won't work with RADIUS authentication.
+#
+AuthType Basic
+
+#
+# Tell the user the realm to which they're authenticating.
+# This string should be configured for your site.
+#
+AuthName "RADIUS authentication for localhost"
+
+#
+# don't use 'mod_auth'.
+# You might want to disable other authentication types here.
+# You can get a similar effect by commenting out the
+# 'AddModule mod_auth_*' lines, previously in httpd.conf
+#
+AuthAuthoritative off
+
+#
+# Use mod_auth_radius for all authentication, and make the responses
+# from it authoritative.
+#
+AuthRadiusAuthoritative on
+
+#
+# Make a local variation of AddRadiusCookieValid.  The server will choose
+# the MINIMUM of the two values.
+#
+# AuthRadiusCookieValid <minutes-for-which-cookie-is-valid>
+#
+AuthRadiusCookieValid 5
+
+#
+# require that mod_auth_radius return a valid user, otherwise
+# access is denied.
+#
+require valid-user
