@@ -1036,7 +1036,7 @@ authenticate_basic_user(request_rec *r)
    *  Also, don't bother doing the stat for requests we're proxying.
    */
   if ((strstr(r->filename, "proxy:") != r->filename) &&
-      (stat(r->filename, &buf) < 0) {
+      (stat(r->filename, &buf) < 0)) {
     return HTTP_NOT_FOUND; /* can't stat it, so we can't authenticate it */
   }
 
