@@ -301,15 +301,8 @@
 #include "apr_tables.h"
 #include "apr_strings.h"
 
-module radius_auth_module;
+module AP_MODULE_DECLARE_DATA radius_auth_module;
 
-/* define DEBUG_RADIUS for lots of status messages */
-#define DEBUG_RADIUS
-#ifdef DEBUG_RADIUS
-#define DPRINTF printf
-#else
-#define DPRINTF
-#endif DEBUG_RADIUS
 
 /*
   RFC 2138 says that this port number is wrong, but everyone's using it.
@@ -387,8 +380,7 @@ typedef struct radius_server_config_struct {
 static void *
 create_radius_server_config(apr_pool_t *p, server_rec *s)
 {
-  radius_server_config_rec *scr = (radius_server_config_rec *)
-    apr_pcalloc(p, sizeof(radius_server_config_rec) );
+  radius_server_config_rec *scr = (radius_server_config_rec *) apr_pcalloc(p, sizeof(radius_server_config_rec) );
 
   scr->radius_ip = NULL;	/* no server yet */
   scr->port = RADIUS_AUTH_UDP_PORT; /* set the default port */
@@ -399,6 +391,7 @@ create_radius_server_config(apr_pool_t *p, server_rec *s)
   scr->timeout = 60;		/* valid for one hour by default */
   scr->bind_address = INADDR_ANY;
   scr->next = NULL;
+
   return scr;
 }
 
@@ -424,7 +417,7 @@ get_random_vector(unsigned char vector[RADIUS_RANDOM_VECTOR_LEN])
   struct timeval tv;
   struct timezone tz;
   static unsigned int session = 1; /* make the random number harder to guess */
-  MD5_CTX my_md5;
+  apr_md5_ctx_t my_md5;
   
   /* Use the time of day with the best resolution the system can
      give us -- often close to microsecond accuracy. */
@@ -433,10 +426,10 @@ get_random_vector(unsigned char vector[RADIUS_RANDOM_VECTOR_LEN])
   tv.tv_sec ^= getpid() * session++; /* add some secret information: session */
 
   /* Hash things to get some cryptographically strong pseudo-random numbers */
-  MD5Init(&my_md5);
-  MD5Update(&my_md5, (unsigned char *) &tv, sizeof(tv));
-  MD5Update(&my_md5, (unsigned char *) &tz, sizeof(tz));
-  MD5Final(vector, &my_md5);	      /* set the final vector */
+  apr_md5_init(&my_md5);
+  apr_md5_update(&my_md5, (unsigned char *) &tv, sizeof(tv));
+  apr_md5_update(&my_md5, (unsigned char *) &tz, sizeof(tz));
+  apr_md5_final(vector, &my_md5);	      /* set the final vector */
 }
 
 /* Per-dir configuration structure */
@@ -451,6 +444,7 @@ typedef struct radius_dir_config_struct {
 static void *
 create_radius_dir_config (apr_pool_t *p, char *d)
 {
+  
   radius_dir_config_rec *rec =
     (radius_dir_config_rec *) apr_pcalloc (p, sizeof(radius_dir_config_rec));
 
@@ -458,6 +452,7 @@ create_radius_dir_config (apr_pool_t *p, char *d)
   rec->active = 1;              /* active by default */  
   rec->authoritative = 1;	/* authoritative by default */
   rec->timeout = 0;		/* let the server config decide timeouts */
+
   return rec;
 }
 
@@ -473,7 +468,8 @@ add_auth_radius(cmd_parms *cmd, void *mconfig,
   scr = ap_get_module_config(cmd->server->module_config, &radius_auth_module);
 
   /* allocate and look up the RADIUS server's IP address */
-  scr->radius_ip = apr_pcalloc(cmd->pool, sizeof(struct in_addr));
+
+  scr->radius_ip = (struct in_addr *)apr_pcalloc(cmd->pool, sizeof(struct in_addr));
 
   /* Check to see if there's a port in the server name */
   if ((p = strchr(server, ':')) != NULL) {
@@ -548,19 +544,23 @@ static command_rec auth_cmds[] = {
   AP_INIT_TAKE23("AddRadiusAuth", add_auth_radius,
     NULL, RSRC_CONF,
     "per-server configuration for RADIUS server name:port, shared secret, and optional timeout:retries"),
+
   AP_INIT_TAKE1("AuthRadiusBindAddress", set_bind_address,
     NULL, RSRC_CONF,
     "per-server binding local socket to this local IP address. RADIUS requests will be sent *from* this IP address."),
+
   AP_INIT_TAKE1("AddRadiusCookieValid", set_cookie_valid,
     NULL, RSRC_CONF, 
     "per-server time in minutes for which the returned cookie is valid. After this time, authentication will be requested again. Use '0' for forever."), 
+
   AP_INIT_FLAG("AuthRadiusAuthoritative", ap_set_flag_slot,
     (void*)APR_OFFSETOF(radius_dir_config_rec, authoritative), OR_AUTHCFG,
    "per-directory access on failed authentication. If set to 'no', then access control is passed along to lower modules on failed authentication."),
+
   AP_INIT_TAKE1("AuthRadiusCookieValid", set_int_slot,
-    (void*)APR_OFFSETOF(radius_dir_config_rec, timeout), OR_AUTHCFG,
-    "per-directory time in minutes for which the returned cookie is valid. After this time, authentication will be requested again
-. Use '0' for forever."),
+    NULL,OR_AUTHCFG,
+    "per-directory time in minutes for which the returned cookie is valid. After this time, authentication will be requested again .Use 0 for forever."),
+
   AP_INIT_FLAG("AuthRadiusActive", ap_set_flag_slot,
     (void*)APR_OFFSETOF(radius_dir_config_rec, active), OR_AUTHCFG,
     "per-directory toggle the use of RADIUS authentication."),
@@ -585,7 +585,7 @@ verify_packet(request_rec *r, radius_packet_t *packet,
   server_rec *s = r->server; 
   radius_server_config_rec *scr = (radius_server_config_rec *)
     ap_get_module_config (s->module_config, &radius_auth_module);
-  MD5_CTX my_md5;
+  apr_md5_ctx_t my_md5;
   unsigned char	calculated[RADIUS_RANDOM_VECTOR_LEN];
   unsigned char	reply[RADIUS_RANDOM_VECTOR_LEN];
   
@@ -597,10 +597,10 @@ verify_packet(request_rec *r, radius_packet_t *packet,
   memcpy(packet->vector, vector, RADIUS_RANDOM_VECTOR_LEN); /* sent vector */
    
   /* MD5(packet header + vector + packet data + secret) */
-  MD5Init(&my_md5);
-  MD5Update(&my_md5, (unsigned char *) packet, ntohs(packet->length));
-  MD5Update(&my_md5, scr->secret, scr->secret_len);
-  MD5Final(calculated, &my_md5);      /* set the final vector */
+  apr_md5_init(&my_md5);
+  apr_md5_update(&my_md5, (unsigned char *) packet, ntohs(packet->length));
+  apr_md5_update(&my_md5, scr->secret, scr->secret_len);
+  apr_md5_final(calculated, &my_md5);      /* set the final vector */
 
   /* Did he use the same random vector + shared secret? */
   if(memcmp(calculated, reply, RADIUS_RANDOM_VECTOR_LEN) != 0) {
@@ -670,32 +670,33 @@ make_cookie(request_rec *r, time_t expires, const char *passwd, const char *stri
   /*
    * Make a cookie based on secret + public information.
    *
-   * cookie = MAC(M) = MD5(secret, MD5(secret, M))
+   * cookie = MAC(M) = apr_md5(secret, MD5(secret, M))
    *
    * See Scheier, B, "Applied Cryptography" 2nd Ed., p.458
    * Also, RFC 2104.  I don't know if the HMAC gives any additional
    * benefit here.
    */  
-  ap_snprintf(one, COOKIE_SIZE, "%s%s%s%s%s%08x", scr->secret,
+  apr_snprintf(one, COOKIE_SIZE, "%s%s%s%s%s%08x", scr->secret,
 	      r->user, passwd, c->remote_ip, hostname, expires);
 
   /* if you're REALLY worried about what's going on */
+
 #if 0
-  DPRINTF("secret     = %s\n", scr->secret);
-  DPRINTF("user       = %s\n", r->user);
-  DPRINTF("passwd     = %s\n", passwd);
-  DPRINTF("remote ip  = %s\n", c->remote_ip);
-  DPRINTF("hostname   = %s\n", hostname);
-  DPRINTF("expiry     = %08x\n", expires);
+  ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server," secret     = %s\n", scr->secret);
+  ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server," user       = %s\n", r->user);
+  ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server," passwd     = %s\n", passwd);
+  ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server," remote ip  = %s\n", c->remote_ip);
+  ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server," hostname   = %s\n", hostname);
+  ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server," expiry     = %08x\n", expires);
 #endif
 
   /* MD5 the cookie to make it secure, and add more secret information */
-  ap_snprintf(two, COOKIE_SIZE, "%s%s", scr->secret, ap_md5(r->pool, one));
+  apr_snprintf(two, COOKIE_SIZE, "%s%s", scr->secret, ap_md5(r->pool, one));
   if (string == NULL) {
-    ap_snprintf(cookie, COOKIE_SIZE, "%s%08x",
+    apr_snprintf(cookie, COOKIE_SIZE, "%s%08x",
 		ap_md5(r->pool, two), expires);
   } else {
-    ap_snprintf(cookie, COOKIE_SIZE, "%s%08x%s",
+    apr_snprintf(cookie, COOKIE_SIZE, "%s%08x%s",
 		ap_md5(r->pool, two), expires, string);
   }
   return cookie;
@@ -731,14 +732,14 @@ add_cookie(request_rec *r, apr_table_t *header, char *cookie, time_t expires)
   char *new_cookie = apr_pcalloc(r->pool, COOKIE_SIZE); /* so it'll stick around */
 
   if (expires != 0) {
-    ap_snprintf(new_cookie, 1024, "%s=%s; path=/;", cookie_name, cookie);
+    apr_snprintf(new_cookie, 1024, "%s=%s; path=/;", cookie_name, cookie);
   } else {
-    ap_snprintf(new_cookie, 1024,
+    apr_snprintf(new_cookie, 1024,
 		"%s=%s; path=/; expires=Wed, 01-Oct-97 01:01:01 GMT;",
 		cookie_name, cookie);
   }
     
-  table_set(header,"Set-Cookie", new_cookie);
+  apr_table_set(header,"Set-Cookie", new_cookie);
 }
 /* Spot a cookie in an incoming request */
 static char *
@@ -750,7 +751,7 @@ spot_cookie(request_rec *r)
   if ((cookie = apr_table_get(r->headers_in, "Cookie"))) {
     if ((value=strstr(cookie, cookie_name))) {
       char *cookiebuf, *cookieend;
-      
+      ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0,r->server,"Found Radius Cookie, now check if it's valid...");
       value += strlen(cookie_name); /* skip the name */
 
       /*
@@ -792,7 +793,7 @@ radius_authenticate(request_rec *r, radius_server_config_rec *scr,
   unsigned char misc[RADIUS_RANDOM_VECTOR_LEN];
   int password_len, i;
   unsigned char password[128];
-  MD5_CTX md5_secret, my_md5;
+  apr_md5_ctx_t md5_secret, my_md5;
   u_int32_t service;
 
   unsigned char send_buffer[RADIUS_PACKET_SEND_SIZE];
@@ -803,7 +804,7 @@ radius_authenticate(request_rec *r, radius_server_config_rec *scr,
   if (password_len == 0) {
     password_len = 16;		/* it's at least 15 bytes long */
   } else if (password_len > 128) { /* password too long, from RFC2138, p.22 */
-    ap_snprintf(errstr, MAX_STRING_LEN, "password given by user %s is too long for RADIUS", user);
+    ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0,r->server,"password given by user %s is too long for RADIUS", user);
     return FALSE;
   }
   
@@ -829,18 +830,18 @@ radius_authenticate(request_rec *r, radius_server_config_rec *scr,
   /* ************************************************************ */
   /* encrypt the password */
   /* password : e[0] = p[0] ^ MD5(secret + vector) */
-  MD5Init(&md5_secret);
-  MD5Update(&md5_secret, scr->secret, scr->secret_len);
+  apr_md5_init(&md5_secret);
+  apr_md5_update(&md5_secret, scr->secret, scr->secret_len);
   my_md5 = md5_secret;		/* so we won't re-do the hash later */
-  MD5Update(&my_md5, vector, RADIUS_RANDOM_VECTOR_LEN);
-  MD5Final(misc, &my_md5);      /* set the final vector */
+  apr_md5_update(&my_md5, vector, RADIUS_RANDOM_VECTOR_LEN);
+  apr_md5_final(misc, &my_md5);      /* set the final vector */
   xor(password, misc, RADIUS_PASSWORD_LEN);
 
   /* For each step through, e[i] = p[i] ^ MD5(secret + e[i-1]) */
   for (i = 1; i < (password_len >> 4); i++) {
     my_md5 = md5_secret;	/* grab old value of the hash */
-    MD5Update(&my_md5, &password[(i-1) * RADIUS_PASSWORD_LEN], RADIUS_PASSWORD_LEN);
-    MD5Final(misc, &my_md5);      /* set the final vector */
+    apr_md5_update(&my_md5, &password[(i-1) * RADIUS_PASSWORD_LEN], RADIUS_PASSWORD_LEN);
+    apr_md5_final(misc, &my_md5);      /* set the final vector */
     xor(&password[i * RADIUS_PASSWORD_LEN], misc, RADIUS_PASSWORD_LEN);
   }
   add_attribute(packet, RADIUS_PASSWORD, password, password_len);
@@ -863,7 +864,7 @@ radius_authenticate(request_rec *r, radius_server_config_rec *scr,
   } else {
     ip_addr = get_ip_addr(r->pool, r->connection->base_server->server_hostname);
     if (ip_addr == NULL) {
-      ap_snprintf(errstr, MAX_STRING_LEN, "cannot look up server hostname %s",
+      ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0,r->server, "cannot look up server hostname %s",
 		  r->connection->base_server->server_hostname);
       return FALSE;
     }
@@ -890,10 +891,12 @@ radius_authenticate(request_rec *r, radius_server_config_rec *scr,
   sin->sin_addr.s_addr = scr->radius_ip->s_addr;
   sin->sin_port = htons(scr->port);
 
+  ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server, "Sending packet on %s:%i", inet_ntoa(*scr->radius_ip), scr->port);
+
   while (retries >= 0) {
     if (sendto(sockfd, (char *) packet, total_length, 0,
 	       &saremote, sizeof(struct sockaddr_in)) < 0) {
-      ap_snprintf(errstr, MAX_STRING_LEN, "error sending RADIUS packet for user %s: %s", user, strerror(errno));
+      ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server, "Error sending RADIUS packet for user %s: %s", user, strerror(errno));
       return FALSE;
     }
 
@@ -922,7 +925,7 @@ radius_authenticate(request_rec *r, radius_server_config_rec *scr,
    *  Error.  Die.
    */
   if (rcode < 0) {
-    ap_snprintf(errstr, MAX_STRING_LEN, "error waiting for RADIUS response: %s", strerror(errno));
+    ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server, "Error waiting for RADIUS response: %s", strerror(errno));
     return FALSE;
   }
   
@@ -930,7 +933,7 @@ radius_authenticate(request_rec *r, radius_server_config_rec *scr,
    *  Time out.
    */
   if (rcode == 0) {
-    ap_snprintf(errstr, MAX_STRING_LEN, "RADIUS server %s failed to respond within %d seconds after each of %d retries",
+    ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server, "RADIUS server %s failed to respond within %d seconds after each of %d retries",
 		inet_ntoa(*scr->radius_ip), scr->wait, scr->retries);
     return FALSE;
   }
@@ -938,21 +941,21 @@ radius_authenticate(request_rec *r, radius_server_config_rec *scr,
   if ((total_length = recvfrom(sockfd, (char *) recv_buffer,
 			       RADIUS_PACKET_RECV_SIZE,
 			       0, &saremote, &salen)) < 0) {
-    ap_snprintf(errstr, MAX_STRING_LEN, "error reading RADIUS packet: %s", strerror(errno));
+    ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server, "Error reading RADIUS packet: %s", strerror(errno));
     return FALSE;
   } else {
 
     packet = (radius_packet_t *) recv_buffer; /* we have a new packet */
     if ((ntohs(packet->length) > total_length) ||
 	     (ntohs(packet->length) > RADIUS_PACKET_RECV_SIZE)) {
-    ap_snprintf(errstr, MAX_STRING_LEN, "RADIUS packet corrupted");
+    ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server, "RADIUS packet corrupted");
     return FALSE;
     }
   }
   
   /* Check if we've got everything OK.  We should also check packet->id...*/
   if (verify_packet(r, packet, vector)) {
-    ap_snprintf(errstr, MAX_STRING_LEN, "RADIUS packet fails verification");
+    ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server, "RADIUS packet fails verification");
     return FALSE;
   }
   
@@ -996,7 +999,7 @@ check_pw(request_rec *r, radius_server_config_rec *scr, const char *user, const 
   /* ************************************************************ */
   /* connect to a port */
   if ((sockfd = socket (AF_INET, SOCK_DGRAM, 0)) < 0) {
-    ap_snprintf(errstr, MAX_STRING_LEN, "error opening RADIUS socket for user %s: %s", user, strerror(errno));
+    ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0,r->server, "error opening RADIUS socket for user %s: %s", user, strerror(errno));
     return FALSE;
   }
 
@@ -1013,7 +1016,7 @@ check_pw(request_rec *r, radius_server_config_rec *scr, const char *user, const 
 	  (local_port < 64000));
   if(local_port >= 64000) {
     close(sockfd);
-    ap_snprintf(errstr, MAX_STRING_LEN, "cannot bind to RADIUS socket for user %s", user);
+    ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server, "cannot bind to RADIUS socket for user %s", user);
     return FALSE;
   }
 
@@ -1046,7 +1049,7 @@ check_pw(request_rec *r, radius_server_config_rec *scr, const char *user, const 
       break;
       
     case RADIUS_ACCESS_REJECT:
-      ap_snprintf(errstr, MAX_STRING_LEN, "RADIUS authentication failed for user %s", user);
+      ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0,r->server, "RADIUS authentication failed for user %s", user);
       break;
       
     case RADIUS_ACCESS_CHALLENGE:
@@ -1057,7 +1060,7 @@ check_pw(request_rec *r, radius_server_config_rec *scr, const char *user, const 
 
 	if (((a_state = find_attribute(packet, RADIUS_STATE)) == NULL) ||
 	    ((a_reply = find_attribute(packet, RADIUS_REPLY_MESSAGE)) == NULL)) {
-	  ap_snprintf(errstr, MAX_STRING_LEN, "RADIUS access-challenge received with State or Reply-Message missing");
+	  ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server, "RADIUS access-challenge received with State or Reply-Message missing");
 	} else {
 	  char *p;
 
@@ -1077,20 +1080,17 @@ check_pw(request_rec *r, radius_server_config_rec *scr, const char *user, const 
 	  }
 	  
 	  /* set the magic cookie */
-	  add_cookie(r, r->err_headers_out,
-		     make_cookie(r, expires, "", server_state), expires);
+	  add_cookie(r, r->err_headers_out,make_cookie(r, expires, "", server_state), expires);
 
 	  /* log the challenge, as it IS an error returned to the user */
-	  ap_snprintf(errstr, MAX_STRING_LEN,
-		      "RADIUS server requested challenge for user %s", user);
+	  ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server, "RADIUS server requested challenge for user %s", user);
 
 	}
       }
       break;
       
     default:			/* don't know what else to do */
-      ap_snprintf(errstr, MAX_STRING_LEN,
-		  "RADIUS server returned unknown response %02x",
+      ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server, "RADIUS server returned unknown response %02x",
 		  packet->code);
       break;
     }
@@ -1102,10 +1102,10 @@ void
 note_challenge_auth_failure(request_rec *r, char *user, char *message)
 {
     if (!*message) {		/* no message to print */
-      note_basic_auth_failure(r);
+      / *note_basic_auth_failure(r); */
     } else {			/* print our magic message */
-      table_set (r->err_headers_out, "WWW-Authenticate",
-		 pstrcat(r->pool, "Basic realm=\"", auth_name(r), " for ", user, " '", message, "'", NULL));
+      apr_table_set (r->err_headers_out, "WWW-Authenticate",
+		 apr_pstrcat(r->pool, "Basic realm=\"", ap_auth_name(r), " for ", user, " '", message, "'", NULL));
     }
 }
 /* These functions return 0 if client is OK, and proper error status
@@ -1143,7 +1143,7 @@ authenticate_basic_user(request_rec *r)
   if (!rec->active || !scr->radius_ip)	/*  not active here, or no radius */
     return DECLINED;                    /*  server declared, decline      */
   
-  if ((res = get_basic_auth_pw(r, &sent_pw)))
+  if ((res = ap_get_basic_auth_pw(r, &sent_pw)))
     return res;
 
   if (r->user[0] == 0)		/* NUL users can never be let in */
@@ -1151,16 +1151,17 @@ authenticate_basic_user(request_rec *r)
 
   message[0] = 0;		/* no message for now */
 
-  DPRINTF("###### %s requests %s : file=%s ######\n",
+  ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server, "Radius Auth for: %s requests %s : file=%s",
 	  r->server->server_hostname, r->uri, r->filename);
 
   /* check for the existence of a cookie: do weak authentication if so */
   if ((cookie = spot_cookie(r)) != NULL) {
-    DPRINTF("Found cookie=%s for user=%s : ", cookie, r->user);
+
+    ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server, "Found cookie=%s for user=%s : ", cookie, r->user);
     /* are we in a Challenge-Response intermediate state? */
     if (((state = strstr(cookie, APACHE_RADIUS_MAGIC_STATE)) != NULL) &&
 	((state - cookie) == 40)) { /* it's in the right place */
-      DPRINTF("with RADIUS challenge state set.\n");
+      ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server, "with RADIUS challenge state set.\n");
       /*
        * If there's an authentication failure, ensure we delete the state.
        * If authentication succeeds, the new cookie will supersede the old.
@@ -1171,17 +1172,17 @@ authenticate_basic_user(request_rec *r)
 
       /* valid username, passwd, and expiry date: don't do RADIUS */
     } else if (valid_cookie(r, cookie, sent_pw)) {
-      DPRINTF("still valid.  Serving page.\n");
+      ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server,"still valid.  Serving page.\n");
       return OK;
     } else {			/* the cookie has probably expired */
       /* don't bother logging the fact: we probably don't care */
       add_cookie(r, r->err_headers_out, cookie, 0);
       note_challenge_auth_failure(r, r->user, message);
-      DPRINTF("invalid or expired. telling browser to delete cookie\n");
+      ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server," invalid or expired. telling browser to delete cookie\n");
       return HTTP_UNAUTHORIZED;
     }
   } else {
-    DPRINTF("No cookie found.  Trying RADIUS authentication.\n");
+    ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server," No cookie found.  Trying RADIUS authentication.\n");
   }
 
   /*
@@ -1195,15 +1196,14 @@ authenticate_basic_user(request_rec *r)
 
   /* Check the password, and fill in the error string if an error happens */
   if (!(check_pw(r, scr, r->user, sent_pw, state, message, errstr))) {
-    DPRINTF("RADIUS authentication for user=%s password=%s failed\n",
+    ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server, "RADIUS authentication for user=%s password=%s failed\n",
 	    r->user, sent_pw);
     if (!(rec->authoritative)) {
-      DPRINTF("We're not authoritative.  Never mind.\n");
+      ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server, "We're not authoritative.  Never mind.\n");
       return DECLINED;		/* never mind */
     }
-    log_reason (errstr, r->uri, r);
     note_challenge_auth_failure(r, r->user, message);
-    DPRINTF("Sending failure message to user=%s : '%s'\n", r->user, message);
+    ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server, "Sending failure message to user=%s\n", r->user);
     return HTTP_UNAUTHORIZED;
   }
 
@@ -1220,10 +1220,9 @@ authenticate_basic_user(request_rec *r)
   expires = time(NULL) + (min * 60);
   cookie = make_cookie(r, expires, sent_pw, NULL);
 
-  DPRINTF("RADIUS Authentication for user=%s password=%s OK.  Cookie expiry in %d minutes\n",
+  ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server," RADIUS Authentication for user=%s password=%s OK.  Cookie expiry in %d minutes\n",
 	  r->user, sent_pw, min);
-  DPRINTF("Adding cookie %s\n", cookie);
-
+  ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server," Adding cookie %s\n", cookie);
   add_cookie(r, r->headers_out, cookie, expires);
   return OK;
 }
@@ -1233,13 +1232,13 @@ static void register_hooks(apr_pool_t *p)
     ap_hook_check_user_id(authenticate_basic_user,NULL,NULL,APR_HOOK_MIDDLE);
 }
 
-module AP_MODULE_DECLARE_DATA auth_module =
+module AP_MODULE_DECLARE_DATA radius_auth_module =
 {
     STANDARD20_MODULE_STUFF,
-    create_radius_dir_config,   /* dir config creater */
+    create_radius_dir_config,	/* dir config creater */
     NULL,                       /* dir merger --- default is to override */
     create_radius_server_config,/* server config */
     NULL,                       /* merge server config */
-    auth_cmds,                  /* command apr_table_t */
+    auth_cmds,                	/* command apr_table_t */
     register_hooks              /* register hooks */
 };
