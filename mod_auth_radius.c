@@ -306,7 +306,8 @@ typedef struct radius_packet_t {
 /* RADIUS attribute definitions. Also from RFC 2138 */
 #define	RADIUS_USER_NAME	      1
 #define	RADIUS_PASSWORD		      2
-#define	RADIUS_CLIENT_ID	      4
+#define	RADIUS_NAS_IP_ADDRESS	      4
+#define	RADIUS_NAS_IDENTIFIER	      5
 #define RADIUS_SERVICE_TYPE           6
 #define RADIUS_REPLY_MESSAGE          18
 #define RADIUS_STATE		      24
@@ -669,13 +670,13 @@ radius_authenticate(request_rec *r, radius_server_config_rec *scr,
   fd_set set;
   struct timeval tv;
   int rcode;
+  struct in_addr *ip_addr;
   
   unsigned char misc[RADIUS_RANDOM_VECTOR_LEN];
   int password_len, i;
   unsigned char password[128];
   AP_MD5_CTX md5_secret, my_md5;
   UINT4 service;
-  struct in_addr *ip_addr;
 
   unsigned char send_buffer[RADIUS_PACKET_SEND_SIZE];
   radius_packet_t *packet = (radius_packet_t *) send_buffer;
@@ -734,15 +735,25 @@ radius_authenticate(request_rec *r, radius_server_config_rec *scr,
 		sizeof(service));
   
   /* ************************************************************ */
-  /* Tell the RADIUS server where we're coming from */
+  /* Tell the RADIUS server which virtual server we're coming from */
+  add_attribute(packet, RADIUS_NAS_IDENTIFIER, r->server->server_hostname,
+		strlen(r->server->server_hostname));
+
+  /* ************************************************************ */
+  /* Tell the RADIUS server which IP address we're coming from */
   if (scr->radius_ip->s_addr == htonl(0x7f000001)) {
     ip_addr = scr->radius_ip; /* go to localhost through localhost */
-  } else if ((ip_addr = get_ip_addr(r->pool, r->server->server_hostname)) == NULL) {
-    ap_snprintf(errstr, MAX_STRING_LEN, "cannot look up server hostname %s", r->server->server_hostname);
-    return FALSE;
+  } else {
+    ip_addr = get_ip_addr(r->pool, r->connection->base_server->server_hostname);
+    if (ip_addr == NULL) {
+      ap_snprintf(errstr, MAX_STRING_LEN, "cannot look up server hostname %s", r->server->server_hostname);
+      return FALSE;
+    }
   }
-  add_attribute(packet, RADIUS_CLIENT_ID, (unsigned char *)&ip_addr->s_addr,
+
+  add_attribute(packet, RADIUS_NAS_IP_ADDRESS, (unsigned char *)&ip_addr->s_addr,
 		sizeof(ip_addr->s_addr));
+  
   
   /* ************************************************************ */
   /* add state, if requested */
