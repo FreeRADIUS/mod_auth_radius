@@ -6,7 +6,7 @@
 #
 ######################################################################
 
-VERSION=1.3.9
+VERSION=1.5.0
 
 ######################################################################
 #
@@ -47,4 +47,4 @@ dist:
 #  Clean up everything.
 #
 clean:
-	@rm -f *~ mod_auth_radius-${VERSION}.tar
+	@rm -f *~ *.o mod_auth_radius-${VERSION}.tar
