@@ -24,6 +24,11 @@ all:
 	@echo
 	@echo "     make"
 	@echo
+	@echo "Alternatively, if you've already built and installed Apache with"
+	@echo dynamic modules, you should be able to install this module via:
+	@echo
+	@echo "     apxs -i -a -c mod_auth_radius.c"
+	@echo	
 	@echo You should add your additional site configuration options to the 'configure'
 	@echo line, above.  Please read the README file for further information.
 	@echo
