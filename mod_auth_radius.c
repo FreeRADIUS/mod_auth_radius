@@ -1,5 +1,5 @@
 /* ====================================================================
- * Copyright (c) 1997-1999 The Apache Group.  All rights reserved.
+ * Copyright (c) 1997-2002 The Apache Group.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -78,7 +78,7 @@
   Module radius_auth_module    mod_auth_radius.o
   
   Add to server configuration file
-  AddRadiusAuth <server>[:port] <secret> [<seconds>]
+  AddRadiusAuth <server>[:port] <secret> [<seconds>[:<retries>]]
   AddRadiusCookieValid <minutes>
   AddModule modules/extra/mod_auth_radius.o              (for 1.3.x)
   
@@ -236,6 +236,8 @@
   Version History
   ===============
 
+  1.5.4  Support for retries from John Lines <john.lines@integris.co.uk>
+
   1.5.3 Bug fix from Bryan Stansell <bryan@stansell.org>, to set
         the right data element for the AddRadiusCookieValid configuration
 	item.
@@ -371,6 +373,7 @@ typedef struct radius_server_config_struct {
   int secret_len;		/* length of the secret (to save time later) */
   int timeout;			/* cookie valid time */
   int wait;			/* wait for RADIUS server responses */
+  int retries;			/*  number of retries on timeout */
   unsigned short port;		/* RADIUS port number */
   unsigned long bind_address;	/* bind socket to this local address */
   struct radius_server_config_struct *next; /* fallback server(s) */
@@ -388,6 +391,7 @@ create_radius_server_config(pool *p, server_rec *s)
   scr->secret = NULL;		/* no secret yet */
   scr->secret_len = 0;
   scr->wait = 5;		/* wait 5 sec before giving up on the packet */
+  scr->retries = 0;		/* no additional retries */
   scr->timeout = 60;		/* valid for one hour by default */
   scr->bind_address = INADDR_ANY;
   scr->next = NULL;
@@ -484,6 +488,10 @@ add_auth_radius(cmd_parms *cmd, void *mconfig,
   scr->secret = pstrdup(cmd->pool, secret);
   scr->secret_len = strlen(scr->secret);
   if (wait != NULL) {
+    if ((p = strchr(wait,':')) != NULL) {
+      *(p++) = 0;   /* null terminate the wait part of the string */
+      scr->retries = atoi(p);
+    } 
     scr->wait = atoi(wait);
   } /* else it's already initialized */
   scr->bind_address = INADDR_ANY;
@@ -533,7 +541,7 @@ set_int_slot (cmd_parms *cmd, char *struct_ptr, char *arg)
 /* Table of which command does what */
 static command_rec auth_cmds[] = {
   { "AddRadiusAuth", add_auth_radius, NULL, RSRC_CONF, TAKE23,
-    "per-server configuration for RADIUS server name:port,  shared secret, and optional timeout" },
+    "per-server configuration for RADIUS server name:port,  shared secret, and optional timeout:retries" },
   
   { "AuthRadiusBindAddress", set_bind_address, NULL, RSRC_CONF, TAKE1,
     "per-server binding local socket to this local IP address.  RADIUS requests will be sent *from* this IP address." },
@@ -776,6 +784,7 @@ radius_authenticate(request_rec *r, radius_server_config_rec *scr,
   struct sockaddr saremote;
   int salen, total_length;
   fd_set set;
+  int retries = scr->retries;
   struct timeval tv;
   int rcode;
   struct in_addr *ip_addr;
@@ -881,29 +890,51 @@ radius_authenticate(request_rec *r, radius_server_config_rec *scr,
   sin->sin_addr.s_addr = scr->radius_ip->s_addr;
   sin->sin_port = htons(scr->port);
 
-  if (sendto(sockfd, (char *) packet, total_length, 0,
-	     &saremote, sizeof(struct sockaddr_in)) < 0) {
-    ap_snprintf(errstr, MAX_STRING_LEN, "error sending RADIUS packet for user %s: %s", user, strerror(errno));
-    return FALSE;
-  }
-  
-  /* ************************************************************ */
-  /* Wait for the response, and verify it. */
-  salen = sizeof (saremote);
-  tv.tv_sec = scr->wait;	/* wait for the specified time */
-  tv.tv_usec = 0;
-  FD_ZERO(&set);		/* clear out the set */
-  FD_SET(sockfd, &set);	/* wait only for the RADIUS UDP socket */
-  
-  rcode = select(sockfd + 1, &set, NULL, NULL, &tv);
-  if (rcode == 0) {		/* time out */
-    ap_snprintf(errstr, MAX_STRING_LEN, "RADIUS server %s failed to respond within %d seconds", inet_ntoa(*scr->radius_ip), scr->wait);
-    return FALSE;
-  } else if (rcode < 0) {	/* error */
+  while (retries >= 0) {
+    if (sendto(sockfd, (char *) packet, total_length, 0,
+	       &saremote, sizeof(struct sockaddr_in)) < 0) {
+      ap_snprintf(errstr, MAX_STRING_LEN, "error sending RADIUS packet for user %s: %s", user, strerror(errno));
+      return FALSE;
+    }
+
+  wait_again:
+    /* ************************************************************ */
+    /* Wait for the response, and verify it. */
+    salen = sizeof (saremote);
+    tv.tv_sec = scr->wait;	/* wait for the specified time */
+    tv.tv_usec = 0;
+    FD_ZERO(&set);		/* clear out the set */
+    FD_SET(sockfd, &set);	/* wait only for the RADIUS UDP socket */
+    
+    rcode = select(sockfd + 1, &set, NULL, NULL, &tv);
+    if ((rcode < 0) && (errno == EINTR)) {
+      goto wait_again;		/* signal, ignore it */
+    }
+
+    if (rcode == 0) {		/* done the select, with no data ready */
+      retries--;
+    } else {
+      break;			/* exit from the 'while retries' loop */
+    }
+  } /* loop over the retries */
+
+  /*
+   *  Error.  Die.
+   */
+  if (rcode < 0) {
     ap_snprintf(errstr, MAX_STRING_LEN, "error waiting for RADIUS response: %s", strerror(errno));
     return FALSE;
   }
   
+  /*
+   *  Time out.
+   */
+  if (rcode == 0) {
+    ap_snprintf(errstr, MAX_STRING_LEN, "RADIUS server %s failed to respond within %d seconds after each of %d retries",
+		inet_ntoa(*scr->radius_ip), scr->wait, scr->retries);
+    return FALSE;
+  }
+
   if ((total_length = recvfrom(sockfd, (char *) recv_buffer,
 			       RADIUS_PACKET_RECV_SIZE,
 			       0, &saremote, &salen)) < 0) {
