@@ -1,7 +1,7 @@
   Introduction
   ============
 
-Written for CRYPTOCard Inc.  http://www.cryptocard.com
+  Written for CRYPTOCard Inc.  http://www.cryptocard.com
 
   Everyone wants strong authentication over the web.  For us, this means
 RADIUS.
@@ -21,8 +21,8 @@ one-time passwords.  They're ever so much more secure.
 Doing so makes all kinds of attacks possible.
 
 
-  Configuraion
-  ============
+  Configuration
+  =============
 
   See the example 'httpd.conf' in this directory for a detailed example
 of the configuration directives.
