@@ -1,8 +1,6 @@
   Introduction
   ============
 
-  Written for CRYPTOCard Inc.  http://www.cryptocard.com
-
   Everyone wants strong authentication over the web.  For us, this means
 RADIUS.
 
@@ -179,7 +177,7 @@ RFCs properly.
   Other
   =====
 
-  Any questions or comments can be sent to me at: alan@freeradius.org
+  Any questions or comments can be sent to me at: aland@freeradius.org
 
 --
 Author:  Alan DeKok <aland@freeradius.org>
