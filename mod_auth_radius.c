@@ -72,6 +72,25 @@
   Also, do NOT have your RADIUS server visible to the external world.
   Doing so makes all kinds of attacks possible.
 
+  **************************************************
+  
+  Add to Configuration file BEFORE mod_auth.o:
+  Module radius_auth_module    mod_auth_radius.o
+  
+  Add to server configuration file
+  AddRadiusAuth <server>[:port] <secret> [<seconds>]
+  AddRadiusCookieValid <minutes>
+  AddModule modules/extra/mod_auth_radius.o              (for 1.3.x)
+  
+  Add to directory configuration
+  AddRadiusAuth <server>[:port] <secret> [<seconds>]
+  AuthRadiusBindAddress <local address/interface>
+  AuthRadiusAuthoritative on
+  AuthRadiusActive on
+  AuthRadiusCookieValid <minutes>
+
+  **************************************************
+
   Adding mod_auth_radius to the Configuration file before mod_auth
   allows you to have mod_auth_radius authoritative by default, but NOT
   have it interfere with the rest of your configuration.  The authentication
@@ -217,6 +236,9 @@
   Version History
   ===============
 
+  1.5.3 Integrated code from http://www.wede.de/sw/mod_auth_radius/
+        which had forked form this one after v1.3.3.
+
   1.5.2 Updates for NAS-Identifier and NAS-IP-Address, based on ideas
         from Adrian Hosey <ahosey@systhug.com>.  The NAS-Identifier is
 	the virtual server host name, and the NAS-IP-Address is the
@@ -346,6 +368,8 @@ typedef struct radius_server_config_struct {
   int timeout;			/* cookie valid time */
   int wait;			/* wait for RADIUS server responses */
   unsigned short port;		/* RADIUS port number */
+  unsigned long bind_address;	/* bind socket to this local address */
+  struct radius_server_config_struct *next; /* fallback server(s) */
 } radius_server_config_rec;
 
 /* per-server configuration create */
@@ -361,6 +385,8 @@ create_radius_server_config(pool *p, server_rec *s)
   scr->secret_len = 0;
   scr->wait = 5;		/* wait 5 sec before giving up on the packet */
   scr->timeout = 60;		/* valid for one hour by default */
+  scr->bind_address = INADDR_ANY;
+  scr->next = NULL;
   return scr;
 }
 
@@ -401,17 +427,39 @@ get_random_vector(unsigned char vector[RADIUS_RANDOM_VECTOR_LEN])
   MD5Final(vector, &my_md5);	      /* set the final vector */
 }
 
+/* Per-dir configuration structure */
+typedef struct radius_dir_config_struct {
+  radius_server_config_rec* server;
+  int active;                   /* Are we doing RADIUS in this dir? */
+  int authoritative;		/* is RADIUS authentication authoritative? */
+  int timeout;			/* cookie time valid */
+} radius_dir_config_rec;
+
+/* Per-dir configuration create */
+static void *
+create_radius_dir_config (pool *p, char *d)
+{
+  radius_dir_config_rec *rec =
+    (radius_dir_config_rec *) pcalloc (p, sizeof(radius_dir_config_rec));
+
+  rec->server = NULL;		/* no valid server by default */
+  rec->active = 1;              /* active by default */  
+  rec->authoritative = 1;	/* authoritative by default */
+  rec->timeout = 0;		/* let the server config decide timeouts */
+  return rec;
+}
+
 /* per-server set configuration */
 static const char *
-add_auth_radius(cmd_parms *cmd, void *mconfig, char *server, char *secret, char *wait)
+add_auth_radius(cmd_parms *cmd, void *mconfig,
+		char *server, char *secret, char *wait)
 {
   radius_server_config_rec *scr;
   unsigned int port;
   char *p;
 
-  scr = get_module_config(cmd->server->module_config,
-			  &radius_auth_module);
-  
+  scr = get_module_config(cmd->server->module_config, &radius_auth_module);
+
   /* allocate and look up the RADIUS server's IP address */
   scr->radius_ip = palloc(cmd->pool, sizeof(struct in_addr));
 
@@ -434,28 +482,23 @@ add_auth_radius(cmd_parms *cmd, void *mconfig, char *server, char *secret, char 
   if (wait != NULL) {
     scr->wait = atoi(wait);
   } /* else it's already initialized */
+  scr->bind_address = INADDR_ANY;
 
   return NULL;			/* everything's OK */
 }
 
-/* Per-dir configuration structure */
-typedef struct radius_dir_config_struct {
-  int active;                   /* Are we doing RADIUS in this dir? */
-  int authoritative;		/* is RADIUS authentication authoritative? */
-  int timeout;			/* cookie time valid */
-} radius_dir_config_rec;
-
-/* Per-dir configuration create */
-static void *
-create_radius_dir_config (pool *p, char *d)
+static const char *
+set_bind_address (cmd_parms *cmd, void *mconfig, char *arg)
 {
-  radius_dir_config_rec *rec =
-    (radius_dir_config_rec *) pcalloc (p, sizeof(radius_dir_config_rec));
+  radius_server_config_rec *scr;
+  struct in_addr *a;
 
-  rec->active = 1;              /* active by default */  
-  rec->authoritative = 1;	/* authoritative by default */
-  rec->timeout = 0;		/* let the server config decide timeouts */
-  return rec;
+  scr = get_module_config(cmd->server->module_config,
+                                &radius_auth_module);
+  if ((a = get_ip_addr(cmd->pool, arg)) == NULL)
+      return "AuthRadiusBindAddress: invalid IP address";
+  scr->bind_address = a->s_addr;
+  return NULL;
 }
 
 static const char *
@@ -471,6 +514,9 @@ static command_rec auth_cmds[] = {
   { "AddRadiusAuth", add_auth_radius, NULL, RSRC_CONF, TAKE23,
     "radius server name:port,  shared secret, and optional timeout" },
   
+  { "AuthRadiusBindAddress", set_bind_address, NULL, RSRC_CONF, TAKE1,
+    "bind client (local) socket to this local IP address" },
+
   { "AddRadiusCookieValid", set_int_slot, 
     (void*)XtOffsetOf(radius_server_config_rec, timeout), 
     RSRC_CONF, TAKE1,
@@ -506,7 +552,8 @@ xor(unsigned char *p, unsigned char *q, int length)
 }
 
 static int
-verify_packet(request_rec *r, radius_packet_t *packet, unsigned char vector[RADIUS_RANDOM_VECTOR_LEN])
+verify_packet(request_rec *r, radius_packet_t *packet,
+	      unsigned char vector[RADIUS_RANDOM_VECTOR_LEN])
 {
   server_rec *s = r->server; 
   radius_server_config_rec *scr = (radius_server_config_rec *)
@@ -575,6 +622,22 @@ make_cookie(request_rec *r, time_t expires, const char *passwd, const char *stri
    * the cookie, and and use it themselves.  Since they appear to be
    * coming from the same IP address (firewall), they're let in.
    * Oh well, at least the connection is traceable to a particular machine.
+   */
+
+  /*
+   *  Piotr Klaban <makler@oryl.man.torun.pl> says:
+   *
+   *  > The "squid" proxy set HTTP_X_FORWARDED_FOR variable - the
+   *  > original IP of the client.  We can use HTTP_X_FORWARDED_FOR
+   *  > variable besides REMOTE_ADDR.
+   *
+   *  > If cookie is stolen, then atacker could use the same proxy as
+   *  > the client, to validate the cookie. If we would use
+   *  > HTTP_X_FORWARDED_FOR, then useing the proxy would not be
+   *  > sufficient.
+   *
+   *  We don't do this, mainly because I haven't gotten around to
+   *  writing the code...
    */
 
   /*
@@ -657,11 +720,21 @@ spot_cookie(request_rec *r)
   const char *cookie;
   char *value;
 
-  if ((cookie = table_get (r->headers_in, "Cookie"))) {
+  if ((cookie = table_get(r->headers_in, "Cookie"))) {
     if ((value=strstr(cookie, cookie_name))) {
       char *cookiebuf, *cookieend;
       
-      value += strlen(cookie_name) + 1; /* skip '=' */
+      value += strlen(cookie_name); /* skip the name */
+
+      /*
+       *  Ensure there's an '=' after the name.
+       */
+      if (*value != '=') {
+	return NULL;
+      } else {
+	value++;
+      }
+      
       cookiebuf = pstrdup( r->pool, value );
       cookieend = strchr(cookiebuf,';');
       if (cookieend) *cookieend = '\0';	/* Ignore anything after a ; */
@@ -805,7 +878,7 @@ radius_authenticate(request_rec *r, radius_server_config_rec *scr,
   
   rcode = select(sockfd + 1, &set, NULL, NULL, &tv);
   if (rcode == 0) {		/* time out */
-    ap_snprintf(errstr, MAX_STRING_LEN, "RADIUS server failed to respond within %d seconds", scr->wait);
+    ap_snprintf(errstr, MAX_STRING_LEN, "RADIUS server %s failed to respond within %d seconds", inet_ntoa(*scr->radius_ip), scr->wait);
     return FALSE;
   } else if (rcode < 0) {	/* error */
     ap_snprintf(errstr, MAX_STRING_LEN, "error waiting for RADIUS response: %s", strerror(errno));
@@ -880,7 +953,7 @@ check_pw(request_rec *r, radius_server_config_rec *scr, const char *user, const 
   sin = (struct sockaddr_in *) &salocal;
   memset((char *) sin, '\0', sizeof(salocal));
   sin->sin_family = AF_INET;
-  sin->sin_addr.s_addr = INADDR_ANY;
+  sin->sin_addr.s_addr = scr->bind_address;
   
   local_port = 1025;
   do {
@@ -956,17 +1029,21 @@ check_pw(request_rec *r, radius_server_config_rec *scr, const char *user, const 
 	  }
 	  
 	  /* set the magic cookie */
-	  add_cookie(r, r->err_headers_out, make_cookie(r, expires, "", server_state), expires);
+	  add_cookie(r, r->err_headers_out,
+		     make_cookie(r, expires, "", server_state), expires);
 
 	  /* log the challenge, as it IS an error returned to the user */
-	  ap_snprintf(errstr, MAX_STRING_LEN, "RADIUS server requested challenge for user %s", user);
+	  ap_snprintf(errstr, MAX_STRING_LEN,
+		      "RADIUS server requested challenge for user %s", user);
 
 	}
       }
       break;
       
     default:			/* don't know what else to do */
-      ap_snprintf(errstr, MAX_STRING_LEN, "RADIUS server returned unknown response %02x", packet->code);
+      ap_snprintf(errstr, MAX_STRING_LEN,
+		  "RADIUS server returned unknown response %02x",
+		  packet->code);
       break;
     }
   
