@@ -14,6 +14,27 @@ requests.  You will, however, need to supply your own RADIUS server to
 perform the actual authentication.
 
 <P><HR>
+<H2>Module building and configuration</H2>
+
+Configure this module into Apache by going to the Apache root direcory,
+and typing:
+<PRE>
+     ./configure --add-module=LOCATION/mod_auth_radius.c
+</PRE>
+where <CODE>LOCATION</CODE> is the directory where the module source file resides.  Then, type
+<PRE>
+     make
+</PRE>
+Alternatively, if you've already built and installed Apache with
+dynamic modules, you should be able to install this module via:
+<PRE>
+     apxs -i -a -c mod_auth_radius.c
+</PRE>
+You should add your additional site configuration options to the configure
+line, above. Please read the <A HREF="README">README</A> file for further
+information.
+
+<P><HR>
 <H2>Files included with the module</H2>
 
 <A HREF="README">README</A> <EM>Introduction and documentation</EM><BR>
@@ -32,6 +53,21 @@ For the latest source code, see the main web or ftp site:
 <P>
 <A HREF="http://www.freeradius.org/mod_auth_radius/">http://www.freeradius.org/mod_auth_radius/</A><BR>
 <A HREF="ftp://ftp.freeradius.org/pub/radius/mod_auth_radius.tar">ftp://ftp.freeradius.org/pub/radius/mod_auth_radius.tar</A>
+
+<P><HR>
+<H2>Author contact</H2>
+
+Alan DeKok <A HREF="mailto:aland@freeradius.org">&lt;aland@freeradius.org&gt;</A>
+
+<P><HR>
+<H2>Related pages</H2>
+
+The <A HREF="http://www.apache.org/httpd.html">Apache HTTP server project</A>
+<BR>
+The <A HREF="http://modules.apache.org/">Apache Module Registry</A>
+<BR>
+mod_auth_radius: another <A HREF="http://www.wede.de/sw/mod_auth_radius/">variant</A>
+
 <P><HR>
 <EM>$Id$</EM>
 </BODY>
