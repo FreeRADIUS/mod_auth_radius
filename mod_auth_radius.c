@@ -53,7 +53,7 @@
  */
 
 /*
-  Version 1.5.0, Nov. 1999, by Alan DeKok <alan@freeradius.org>
+  Version 1.5.2, Oct. 2000, by Alan DeKok <aland@freeradius.org>
   for CRYPTOCard Inc.          http://www.cryptocard.com/
 
   Everyone wants strong authentication over the web.  For us, this means
