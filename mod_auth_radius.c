@@ -201,7 +201,7 @@
   authorization required message over and over.  You must then exit the
   browser, and re-load the web page.
 
-  Any questions or comments can be sent to me at: alan@cryptocard.com
+  Any questions or comments can be sent to me at: aland@freeradius.org
 
 
   Challenge-Response support
