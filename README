@@ -110,10 +110,18 @@ page.
 The way to fix this is to point the browser at a specific page. i.e.
 
 http://www.example.com/
-       says "connect to our _secure_ site",  where _secure_ is a link to 
+
+  Which points to the page 'index.html' (or similar).  That file
+should contain text which says "connect to our _secure_ site", where
+_secure_ is a link to a specific *page*, not a *directory*.  e.g.
 
 http://www.example.com/secure/index.html
 
+  If you do not add in 'index.html' in the link, it won't work
+properly.
+
+  This method ensures that users are only authenticated once for the
+secure pages, and not multiple times.
 
   People using static passwords don't need to do this, but if they
 don't, they'll notice that their RADIUS server is getting 1-4 hits for
@@ -141,8 +149,6 @@ thinks are too old.  If your browser doesn't expire the cookie, you'll
 see an authorization required message over and over.  You must then
 exit the browser, and re-load the web page.
 
-  Any questions or comments can be sent to me at: alan@freeradius.org
-
 
   Challenge-Response support
   ==========================
@@ -168,6 +174,12 @@ and these cookies include the RADIUS state variable.
   The challenge-response works on Netscape 3.x and 4.x, HotJava, but
 NOT on Internet Explorer.  I.E. does not appear to follow the relevant
 RFCs properly.
+
+
+  Other
+  =====
+
+  Any questions or comments can be sent to me at: alan@freeradius.org
 
 --
 Author:  Alan DeKok <aland@freeradius.org>
