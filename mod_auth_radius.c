@@ -316,11 +316,11 @@ typedef struct radius_packet_t {
 #define	RADIUS_USER_NAME	      1
 #define	RADIUS_PASSWORD		      2
 #define	RADIUS_NAS_IP_ADDRESS	      4
-#define	RADIUS_NAS_IDENTIFIER	      5
 #define RADIUS_SERVICE_TYPE           6
 #define RADIUS_REPLY_MESSAGE          18
 #define RADIUS_STATE		      24
 #define RADIUS_SESSION_TIMEOUT        27
+#define	RADIUS_NAS_IDENTIFIER	      32
 
 /* service types : authenticate only for now */
 #define RADIUS_AUTHENTICATE_ONLY      8
@@ -755,7 +755,8 @@ radius_authenticate(request_rec *r, radius_server_config_rec *scr,
   } else {
     ip_addr = get_ip_addr(r->pool, r->connection->base_server->server_hostname);
     if (ip_addr == NULL) {
-      ap_snprintf(errstr, MAX_STRING_LEN, "cannot look up server hostname %s", r->server->server_hostname);
+      ap_snprintf(errstr, MAX_STRING_LEN, "cannot look up server hostname %s",
+		  r->connection->base_server->server_hostname);
       return FALSE;
     }
   }
