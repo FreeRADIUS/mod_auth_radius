@@ -15,7 +15,7 @@ VERSION=1.5.0
 #
 all:
 	@echo
-	@echo Configure this module into Apache by going to the Apache root direcory,
+	@echo Configure this module into Apache by going to the Apache root directory,
 	@echo and typing:
 	@echo
 	@echo "     ./configure --add-module=`pwd`/mod_auth_radius.c"
