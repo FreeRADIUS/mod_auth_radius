@@ -151,7 +151,7 @@ exit the browser, and re-load the web page.
   Challenge-Response support
   ==========================
 
-  As of 1.2.1, this module supports the full RADIUS challenge-response
+  This module also supports the full RADIUS challenge-response
 mechanism.  From the user's perspective, on authenticatation, type in
 username & garbage (or NUL) password.  Click <OK>, and you'll get an
 authentication failure.  This is fine, as mod_auth_radius has secretly
