@@ -440,6 +440,7 @@ add_auth_radius(cmd_parms *cmd, void *mconfig, char *server, char *secret, char 
 
 /* Per-dir configuration structure */
 typedef struct radius_dir_config_struct {
+  int active;                   /* Are we doing RADIUS in this dir? */
   int authoritative;		/* is RADIUS authentication authoritative? */
   int timeout;			/* cookie time valid */
 } radius_dir_config_rec;
@@ -450,7 +451,8 @@ create_radius_dir_config (pool *p, char *d)
 {
   radius_dir_config_rec *rec =
     (radius_dir_config_rec *) pcalloc (p, sizeof(radius_dir_config_rec));
-  
+
+  rec->active = 1;              /* active by default */  
   rec->authoritative = 1;	/* authoritative by default */
   rec->timeout = 0;		/* let the server config decide timeouts */
   return rec;
@@ -483,6 +485,11 @@ static command_rec auth_cmds[] = {
     (void*)XtOffsetOf(radius_dir_config_rec, timeout), 
     OR_AUTHCFG, TAKE1,
     "time in minutes that the returned cookie is valid for.  After this time, authentication will be requested again.  Use '0' for forever." }, 
+  
+  { "AuthRadiusActive", set_flag_slot,
+    (void*)XtOffsetOf(radius_dir_config_rec, active),
+    OR_AUTHCFG, FLAG,
+    "Toggle the use of RADIUS authentication at this Location" },
 
   { NULL }
 };
@@ -1008,8 +1015,8 @@ authenticate_basic_user(request_rec *r)
   time_t expires;
   struct stat buf;
   
-  if (!scr->radius_ip)	/* no radius server declared, decline */
-    return DECLINED;
+  if (!rec->active || !scr->radius_ip)	/*  not active here, or no radius */
+    return DECLINED;                    /*  server declared, decline      */
   
   if ((res = get_basic_auth_pw(r, &sent_pw)))
     return res;
