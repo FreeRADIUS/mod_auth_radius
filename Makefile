@@ -6,6 +6,7 @@
 #
 ######################################################################
 
+VERSION=1.3.9
 
 ######################################################################
 #
@@ -25,13 +26,13 @@ all:
 #  Check a distribution out of the source tree, and make a tar file.
 #
 dist:
-	cvs export -Dtoday mod_auth_radius
-	tar -cf mod_auth_radius.tar mod_auth_radius
-	rm -rf mod_auth_radius
+	cvs export -Dtoday -d mod_auth_radius-${VERSION} mod_auth_radius
+	tar -cf mod_auth_radius-${VERSION}.tar mod_auth_radius-${VERSION}
+	rm -rf mod_auth_radius-${VERSION}
 
 ######################################################################
 #
 #  Clean up everything.
 #
 clean:
-	@rm -f *~ mod_auth_radius.tar
+	@rm -f *~ mod_auth_radius-${VERSION}.tar
