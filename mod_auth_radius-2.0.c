@@ -53,9 +53,6 @@
  */
 
 /*
-  Version 1.5.2, Oct. 2000, by Alan DeKok <aland@freeradius.org>
-  for CRYPTOCard Inc.          http://www.cryptocard.com/
-
   Everyone wants strong authentication over the web.  For us, this means
   RADIUS.
   
@@ -236,9 +233,8 @@
   Version History
   ===============
 
-  Port to Apache 2.0.x by Harrie Hazewinkel <harrie@mod-snmp.com>
-
   1.5.4  Support for retries from John Lines <john.lines@integris.co.uk>
+         Port to Apache 2.0 by Harrie Hazewinkel <harrie@mod-snmp.com>
 
   1.5.3 Bug fix from Bryan Stansell <bryan@stansell.org>, to set
         the right data element for the AddRadiusCookieValid configuration
