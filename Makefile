@@ -18,11 +18,12 @@ all:
 	@echo Configure this module into Apache by going to the Apache root directory,
 	@echo and typing:
 	@echo
-	@echo "     ./configure --add-module=`pwd`/mod_auth_radius.c"
+	@echo "     ./configure --add-module=`pwd`/mod_auth_radius.c --enable-shared=auth_radius"
 	@echo
 	@echo and then
 	@echo
 	@echo "     make"
+	@echo "     make install"
 	@echo
 	@echo "Alternatively, if you've already built and installed Apache with"
 	@echo dynamic modules, you should be able to install this module via:
