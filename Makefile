@@ -14,11 +14,18 @@ VERSION=1.3.9
 #  the module.
 #
 all:
+	@echo
 	@echo Configure this module into Apache by going to the Apache root direcory,
 	@echo and typing:
 	@echo
-	@echo ./configure --add-module=`pwd`/mod_auth_radius.c
-	@echo make
+	@echo "     ./configure --add-module=`pwd`/mod_auth_radius.c"
+	@echo
+	@echo and then
+	@echo
+	@echo "     make"
+	@echo
+	@echo You should add your additional site configuration options to the 'configure'
+	@echo line, above.  Please read the README file for further information.
 	@echo
 
 ######################################################################
