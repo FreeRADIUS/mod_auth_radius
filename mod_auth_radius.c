@@ -1019,9 +1019,7 @@ check_pw(request_rec *r, radius_server_config_rec *scr, const char *user, const 
       break;
       
     case RADIUS_ACCESS_CHALLENGE:
-      if (state != NULL) {    /* Complain if the state already exists */
-	ap_snprintf(errstr, MAX_STRING_LEN, "RADIUS returned Access-Challenge when sent State (authentication failure)");
-      } else {			/* it's good: set the state */
+      {
 	attribute_t *a_state, *a_reply;
 	time_t expires = time(NULL) + 120; /* state expires in two minutes */
 	char server_state[256];
