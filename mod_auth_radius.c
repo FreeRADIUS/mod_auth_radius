@@ -217,6 +217,15 @@
   Version History
   ===============
 
+  1.5.2 Updates for NAS-Identifier and NAS-IP-Address, based on ideas
+        from Adrian Hosey <ahosey@systhug.com>.  The NAS-Identifier is
+	the virtual server host name, and the NAS-IP-Address is the
+	IP address of the base server.
+
+  1.5.1 Quick release, for bug found by f.garosi@usl7.toscana.it.
+
+  1.5.0 Don't stat() proxy requests.
+
   1.3.3 Another minor bug fix and configuration hints for Apache 1.3.x
         Thanks to Hiroshi MIZOGUCHI <mizoguti@screen.co.jp>.
 
