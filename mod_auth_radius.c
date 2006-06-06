@@ -728,7 +728,11 @@ add_cookie(request_rec *r, table *header, char *cookie, time_t expires)
   char *new_cookie = palloc(r->pool, COOKIE_SIZE); /* so it'll stick around */
 
   if (expires != 0) {
-    ap_snprintf(new_cookie, 1024, "%s=%s; path=/;", cookie_name, cookie);
+    char buffer[1024];
+
+    strftime(buffer, sizeof(buffer), "%a %d-%b-%Y %H:%M:%S %Z", expires);
+    ap_snprintf(new_cookie, 1024, "%s=%s; path=/ expires=%s;",
+		cookie_name, cookie, buffer);
   } else {
     ap_snprintf(new_cookie, 1024,
 		"%s=%s; path=/; expires=Wed, 01-Oct-97 01:01:01 GMT;",
