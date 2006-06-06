@@ -943,14 +943,18 @@ radius_authenticate(request_rec *r, radius_server_config_rec *scr,
 			       0, &saremote, &salen)) < 0) {
     ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server, "Error reading RADIUS packet: %s", strerror(errno));
     return FALSE;
-  } else {
+  }
 
-    packet = (radius_packet_t *) recv_buffer; /* we have a new packet */
-    if ((ntohs(packet->length) > total_length) ||
-	     (ntohs(packet->length) > RADIUS_PACKET_RECV_SIZE)) {
+  if (total_length < RADIUS_HEADER_LEN) {
+    ap_snprintf(errstr, MAX_STRING_LEN, "Packet is too small");
+    return FALSE;
+  }
+
+  packet = (radius_packet_t *) recv_buffer; /* we have a new packet */
+  if ((ntohs(packet->length) > total_length) ||
+      (ntohs(packet->length) > RADIUS_PACKET_RECV_SIZE)) {
     ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server, "RADIUS packet corrupted");
     return FALSE;
-    }
   }
   
   /* Check if we've got everything OK.  We should also check packet->id...*/
@@ -969,7 +973,11 @@ find_attribute(radius_packet_t *packet, unsigned char type)
   attribute_t *attr = &packet->first;
   int len = ntohs(packet->length) - RADIUS_HEADER_LEN;
 
+  if (!len) return NULL;
+
   while (attr->attribute != type) {
+    if (attr->length < 2) return NULL;
+
     if ((len -= attr->length) <= 0) {
       return NULL;		/* not found */
     }
