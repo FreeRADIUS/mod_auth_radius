@@ -734,8 +734,9 @@ add_cookie(request_rec *r, apr_table_t *header, char *cookie, time_t expires)
   if (expires != 0) {
     char buffer[1024];
 
-    strftime(buffer, sizeof(buffer), "%a %d-%b-%Y %H:%M:%S %Z", expires);
-    ap_snprintf(new_cookie, 1024, "%s=%s; path=/ expires=%s;",
+    strftime(buffer, sizeof(buffer), "%a %d-%b-%Y %H:%M:%S %Z",
+	     gmtime(&expires));
+    apr_snprintf(new_cookie, 1024, "%s=%s; path=/ expires=%s;",
 		cookie_name, cookie, buffer);
   } else {
     apr_snprintf(new_cookie, 1024,
@@ -950,7 +951,7 @@ radius_authenticate(request_rec *r, radius_server_config_rec *scr,
   }
 
   if (total_length < RADIUS_HEADER_LEN) {
-    ap_snprintf(errstr, MAX_STRING_LEN, "Packet is too small");
+    apr_snprintf(errstr, MAX_STRING_LEN, "Packet is too small");
     return FALSE;
   }
 
@@ -1078,7 +1079,7 @@ check_pw(request_rec *r, radius_server_config_rec *scr, const char *user, const 
 	}
 
 	if ((a_state->length <= 2) || (a_reply->length <= 2)) {
-	  ap_snprintf(errstr, MAX_STRING_LEN, "RADIUS access-challenge received with invalid State or Reply-Message");
+	  apr_snprintf(errstr, MAX_STRING_LEN, "RADIUS access-challenge received with invalid State or Reply-Message");
 	  break;
 	}
 
@@ -1202,6 +1203,7 @@ authenticate_basic_user(request_rec *r)
     ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server," No cookie found.  Trying RADIUS authentication.\n");
   }
 
+#if 0
   /*
    *  This is for one-time passwords, so we don't get too badly out of sync .
    *  Also, don't bother doing the stat for requests we're proxying.
@@ -1210,6 +1212,7 @@ authenticate_basic_user(request_rec *r)
       (stat(r->filename, &buf) < 0)) {
     return HTTP_NOT_FOUND; /* can't stat it, so we can't authenticate it */
   }
+#endif
 
   /* Check the password, and fill in the error string if an error happens */
   if (!(check_pw(r, scr, r->user, sent_pw, state, message, errstr))) {
