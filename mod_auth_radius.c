@@ -984,8 +984,11 @@ find_attribute(radius_packet_t *packet, unsigned char type)
   }
   return attr;
 }
-#define radcpy(STRING, ATTR) {memcpy(STRING, ATTR->data, ATTR->length - 2); \
-                              (STRING)[ATTR->length - 2] = 0;}
+#define radcpy(STRING, ATTR) do { \
+				  unsigned char len = ATTR->length; \
+				  if (len >= 2) len-=2; \
+				  memcpy(STRING, ATTR->data, len); \
+				  (STRING)[len] = 0;} while (0)
 
 
 /* authentication module utility functions */
