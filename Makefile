@@ -39,7 +39,7 @@ all:
 #  Check a distribution out of the source tree, and make a tar file.
 #
 dist:
-	cvs export -Dtoday -d mod_auth_radius-${VERSION} mod_auth_radius
+#	cvs export -Dtoday -d mod_auth_radius-${VERSION} mod_auth_radius
 	tar -cf mod_auth_radius-${VERSION}.tar mod_auth_radius-${VERSION}
 	rm -rf mod_auth_radius-${VERSION}
 
