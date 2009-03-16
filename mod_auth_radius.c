@@ -302,7 +302,7 @@ module radius_auth_module;
 #define DPRINTF printf
 #else
 #define DPRINTF
-#endif DEBUG_RADIUS
+#endif /* DEBUG_RADIUS */
 
 /*
   RFC 2138 says that this port number is wrong, but everyone's using it.
