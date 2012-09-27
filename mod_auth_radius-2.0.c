@@ -348,6 +348,7 @@ typedef struct radius_packet_t {
 #define RADIUS_REPLY_MESSAGE          18
 #define RADIUS_STATE		      24
 #define RADIUS_SESSION_TIMEOUT        27
+#define	RADIUS_CALLING_STATION_ID     31
 #define	RADIUS_NAS_IDENTIFIER	      32
 
 /* service types : authenticate only for now */
@@ -882,6 +883,10 @@ radius_authenticate(request_rec *r, radius_server_config_rec *scr,
 		sizeof(ip_addr->s_addr));
   
   
+  /* ************************************************************ */
+  /* add client IP address */
+  add_attribute(packet, RADIUS_CALLING_STATION_ID, r->connection->remote_ip, strlen(r->connection->remote_ip));
+
   /* ************************************************************ */
   /* add state, if requested */
   if (state != NULL) {
