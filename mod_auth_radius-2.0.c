@@ -442,6 +442,7 @@ typedef struct radius_dir_config_struct {
   int active;                   /* Are we doing RADIUS in this dir? */
   int authoritative;		/* is RADIUS authentication authoritative? */
   int timeout;			/* cookie time valid */
+  unsigned char *calling_station_id; /* custom value for specifying hardcoded calling station ID */
 } radius_dir_config_rec;
 
 /* Per-dir configuration create */
@@ -456,6 +457,7 @@ create_radius_dir_config (apr_pool_t *p, char *d)
   rec->active = 1;              /* active by default */  
   rec->authoritative = 1;	/* authoritative by default */
   rec->timeout = 0;		/* let the server config decide timeouts */
+  rec->calling_station_id = NULL; /* no custom value for calling station ID yet ; use default behavior */
 
   return rec;
 }
@@ -556,6 +558,10 @@ static command_rec auth_cmds[] = {
   AP_INIT_TAKE1("AddRadiusCookieValid", set_cookie_valid,
     NULL, RSRC_CONF, 
     "per-server time in minutes for which the returned cookie is valid. After this time, authentication will be requested again. Use '0' for forever."), 
+
+  AP_INIT_TAKE1("AddRadiusCallingStationID", ap_set_string_slot,
+    (void*)APR_OFFSETOF(radius_dir_config_rec, calling_station_id), OR_AUTHCFG,
+    "per-directory custom value for the calling station ID attribute. If unset, default is to use the client's remote IP address."),
 
   AP_INIT_FLAG("AuthRadiusAuthoritative", ap_set_flag_slot,
     (void*)APR_OFFSETOF(radius_dir_config_rec, authoritative), OR_AUTHCFG,
@@ -807,6 +813,8 @@ radius_authenticate(request_rec *r, radius_server_config_rec *scr,
 
   unsigned char send_buffer[RADIUS_PACKET_SEND_SIZE];
   radius_packet_t *packet = (radius_packet_t *) send_buffer;
+  radius_dir_config_rec *rec =
+    (radius_dir_config_rec *)ap_get_module_config (r->per_dir_config, &radius_auth_module);
 
   i = strlen(passwd_in);
   password_len = (i + 0x0f) & 0xfffffff0; /* round off to 16 */
@@ -884,8 +892,12 @@ radius_authenticate(request_rec *r, radius_server_config_rec *scr,
   
   
   /* ************************************************************ */
-  /* add client IP address */
-  add_attribute(packet, RADIUS_CALLING_STATION_ID, r->connection->remote_ip, strlen(r->connection->remote_ip));
+  /* add calling station ID (if custom value not specified, add client IP address) */
+  if (rec->calling_station_id == NULL) {
+    add_attribute(packet, RADIUS_CALLING_STATION_ID, r->connection->remote_ip, strlen(r->connection->remote_ip));
+  } else {
+    add_attribute(packet, RADIUS_CALLING_STATION_ID, rec->calling_station_id, strlen(rec->calling_station_id));
+  }
 
   /* ************************************************************ */
   /* add state, if requested */
