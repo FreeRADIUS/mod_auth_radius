@@ -50,6 +50,11 @@ by forcing re-authentication every hour.
 message is generated ONLY when a user has authenticated, and their
 name & file accessed is put in the log file.
 
+  The per-dir AddRadiusCallingStationID configuration option will
+force the calling station ID string (only static strings) and
+include it in authentication requests, if used. If not used, the
+default behavior, using the client's remote IP address will be
+applied.
 
   How it works
   ============
@@ -179,6 +184,23 @@ RFCs properly.
 
   Any questions or comments can be sent to me at: aland@freeradius.org
 
+  Fork
+  ====
+
+  This fork simply adds a setting for Apache 2.x, allowing to specify
+a custom Calling Station ID string, that is not necessarily the client's
+IP address.
+
+  This is a behiavor I needed in order to accomodate an historic
+implementation at my company that used the Calling Station ID as a
+group membership indicator/security token, prompting me to create
+my own patch, in a non-disruptive fashion compared to the existing
+implementation and behavior. ("Don't add it, nothing changes")
+
+  In a way, in my specific use case, AddRadiusCallingStationID is
+used in the same way as one would use "require group" with mod_ldap.
+
 --
 Author:  Alan DeKok <aland@freeradius.org>
+Patch:   Stephane Lapie <stephane.lapie@asahinet.com>
          $Id$
