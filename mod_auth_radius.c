@@ -732,7 +732,7 @@ add_cookie(request_rec *r, table *header, char *cookie, time_t expires)
 
     strftime(buffer, sizeof(buffer), "%a %d-%b-%Y %H:%M:%S %Z",
 	     gmtime(&expires));
-    ap_snprintf(new_cookie, 1024, "%s=%s; path=/ expires=%s;",
+    ap_snprintf(new_cookie, 1024, "%s=%s; path=/; expires=%s;",
 		cookie_name, cookie, buffer);
   } else {
     ap_snprintf(new_cookie, 1024,
