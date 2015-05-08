@@ -407,6 +407,52 @@ create_radius_server_config(apr_pool_t *p, server_rec *s)
   return scr;
 }
 
+/*
+ * This function gets called to merge two per-server configuration
+ * records.  This is typically done to cope with things like virtual hosts and
+ * the default server configuration. The routine has the responsibility of
+ * creating a new record and merging the contents of the other two into it
+ * appropriately. If the module doesn't declare a merge routine, the more
+ * specific existing record is used exclusively.
+ *
+ * The routine MUST NOT modify any of its arguments!
+ *
+ * The return value is a pointer to the created module-specific structure
+ * containing the merged values.
+ */
+static void *
+radius_merge_server_config(apr_pool_t * p, void *server1_conf, void *server2_conf)
+{
+	void * result = NULL;
+
+	radius_server_config_rec *pMergedConfig = create_radius_server_config(p, NULL);
+	radius_server_config_rec *pServer1Config = (radius_server_config_rec *) server1_conf;
+	radius_server_config_rec *pServer2Config = (radius_server_config_rec *) server2_conf;
+
+	result = ( NULL == pServer2Config->radius_ip ) ? pServer1Config->radius_ip : pServer2Config->radius_ip;
+	if ( NULL != result )
+	{
+		pMergedConfig->radius_ip = apr_pcalloc(p, sizeof(struct in_addr));
+	    *pMergedConfig->radius_ip = *((struct in_addr *) result); /* make a copy */
+	}
+
+	result = ( NULL == pServer2Config->secret ) ? pServer1Config->secret : pServer2Config->secret;
+	if ( NULL != result )
+	{
+		pMergedConfig->secret = apr_pstrdup(p, (char*)result); /* make a copy */
+		pMergedConfig->secret_len = strlen( pMergedConfig->secret );
+	}
+
+	pMergedConfig->port = pServer2Config->port ;
+	pMergedConfig->wait = pServer2Config->wait ;
+	pMergedConfig->retries = pServer2Config->retries ;
+	pMergedConfig->timeout = pServer2Config->timeout ;
+	pMergedConfig->bind_address = pServer2Config->bind_address ;
+
+    return (void *)pMergedConfig;
+}
+
+
 /* RADIUS utility functions */
 static struct in_addr *
 get_ip_addr(apr_pool_t *p, const char *hostname)
@@ -450,25 +496,65 @@ typedef struct radius_dir_config_struct {
   int active;                   /* Are we doing RADIUS in this dir? */
   int authoritative;		/* is RADIUS authentication authoritative? */
   int timeout;			/* cookie time valid */
-  unsigned char *calling_station_id; /* custom value for specifying hardcoded calling station ID */
+  char *calling_station_id; /* custom value for specifying hardcoded calling station ID */
 } radius_dir_config_rec;
 
 /* Per-dir configuration create */
 static void *
 create_radius_dir_config (apr_pool_t *p, char *d)
 {
-  
+
   radius_dir_config_rec *rec =
     (radius_dir_config_rec *) apr_pcalloc (p, sizeof(radius_dir_config_rec));
 
   rec->server = NULL;		/* no valid server by default */
-  rec->active = 1;              /* active by default */  
+  rec->active = 1;              /* active by default */
   rec->authoritative = 1;	/* authoritative by default */
   rec->timeout = 0;		/* let the server config decide timeouts */
   rec->calling_station_id = NULL; /* no custom value for calling station ID yet ; use default behavior */
 
   return rec;
 }
+
+
+/*
+ * This function gets called to merge two per-directory configuration
+ * records.  This is typically done to cope with things like .htaccess files
+ * or <Location> directives for directories that are beneath one for which a
+ * configuration record was already created.  The routine has the
+ * responsibility of creating a new record and merging the contents of the
+ * other two into it appropriately.  If the module doesn't declare a merge
+ * routine, the record for the closest ancestor location (that has one) is
+ * used exclusively.
+ *
+ * The routine MUST NOT modify any of its arguments!
+ *
+ * The return value is a pointer to the created module-specific structure
+ * containing the merged values.
+ */
+static void *
+radius_merge_dir_config(apr_pool_t * p, void *parent_conf, void *newloc_conf)
+{
+	void * result = NULL;
+
+	radius_dir_config_rec *pMergedConfig = create_radius_dir_config(p, NULL);
+	radius_dir_config_rec *pServer1Config = (radius_dir_config_rec *) parent_conf;
+	radius_dir_config_rec *pServer2Config = (radius_dir_config_rec *) newloc_conf;
+
+	result = ( NULL == pServer2Config->calling_station_id ) ?
+			pServer1Config->calling_station_id : pServer2Config->calling_station_id;
+	if ( NULL != result )
+	{
+		pMergedConfig->calling_station_id = apr_pstrdup(p, (char*)result); /* make a copy */
+	}
+
+	pMergedConfig->active = pServer2Config->active ;
+	pMergedConfig->authoritative = pServer2Config->authoritative ;
+	pMergedConfig->timeout = pServer2Config->timeout ;
+
+    return (void *)pMergedConfig;
+}
+
 
 /* per-server set configuration */
 static const char *
@@ -904,7 +990,7 @@ radius_authenticate(request_rec *r, radius_server_config_rec *scr,
     add_attribute(packet, RADIUS_CALLING_STATION_ID, (unsigned char *)r->connection->client_ip,
     		strlen(r->connection->client_ip));
   } else {
-    add_attribute(packet, RADIUS_CALLING_STATION_ID, rec->calling_station_id,
+    add_attribute(packet, RADIUS_CALLING_STATION_ID, (unsigned char *)rec->calling_station_id,
     		strlen((char *)rec->calling_station_id));
   }
 
@@ -1347,9 +1433,10 @@ module AP_MODULE_DECLARE_DATA radius_auth_module =
 {
     STANDARD20_MODULE_STUFF,
     create_radius_dir_config,	/* dir config creater */
-    NULL,                       /* dir merger --- default is to override */
+    radius_merge_dir_config,                       /* dir merger --- default is to override */
     create_radius_server_config,/* server config */
-    NULL,                       /* merge server config */
+    radius_merge_server_config,                       /* merge server config */
     auth_cmds,                	/* command apr_table_t */
     register_hooks              /* register hooks */
 };
+
