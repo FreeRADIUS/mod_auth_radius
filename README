@@ -4,12 +4,12 @@
   Everyone wants strong authentication over the web.  For us, this means
 RADIUS.
 
-  Using static passwords & RADIUS authentication over the web is a BAD
+  Using static passwords & RADIUS authentication over HTTP is a BAD
 IDEA.  Everyone can sniff the passwords, as they're sent over the net
-in the clear.  RADIUS web authentication is a REALLY BAD IDEA if you
-use the same RADIUS server for web and NAS (dial-up) or firewall
-users.  Then ANYONE can pretend to be you, and break through your
-firewall with minimal effort.
+in the clear.  We suggest using HTTPS.  RADIUS web authentication is a
+REALLY BAD IDEA if you use the same RADIUS server for web and NAS
+(dial-up) or firewall users.  Then ANYONE can pretend to be you, and
+break through your firewall with minimal effort.
 
   PLEASE use a different RADIUS server for web authentication and
 dial-up or firewall users!  If you must use the same server, go for
