@@ -1309,17 +1309,17 @@ authenticate_basic_user_common(request_rec *r,
 
       /* valid username, passwd, and expiry date: don't do RADIUS */
     } else if (valid_cookie(r, cookie, sent_pw)) {
-      ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server,"still valid.  Serving page.\n");
+      ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server, "still valid.  Serving page.\n");
       return OK;
     } else {            /* the cookie has probably expired */
       /* don't bother logging the fact: we probably don't care */
       add_cookie(r, r->err_headers_out, cookie, 0);
       note_challenge_auth_failure(r, r->user, message);
-      ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server," invalid or expired. telling browser to delete cookie\n");
+      ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server,"Invalid or expired. telling browser to delete cookie\n");
       return HTTP_UNAUTHORIZED;
     }
   } else {
-    ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server," No cookie found.  Trying RADIUS authentication.\n");
+    ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server,"No cookie found.  Trying RADIUS authentication.\n");
   }
 
 #if 0
@@ -1359,9 +1359,12 @@ authenticate_basic_user_common(request_rec *r,
   expires = time(NULL) + (min * 60);
   cookie = make_cookie(r, expires, sent_pw, NULL);
 
-  ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server," RADIUS Authentication for user=%s password=%s OK.  Cookie expiry in %d minutes\n",
-      r->user, sent_pw, min);
-  ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server," Adding cookie %s\n", cookie);
+  ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server,
+          "RADIUS Authentication for user=%s password=%s OK.  Cookie expiry in %d minutes\n",
+          r->user, sent_pw, min);
+
+  ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server, "Adding cookie %s\n", cookie);
+  
   add_cookie(r, r->headers_out, cookie, expires);
 
   return OK;
