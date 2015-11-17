@@ -1,0 +1,6 @@
+*.swp
+*.la
+*.lo
+*.slo
+.libs/
+*.so
