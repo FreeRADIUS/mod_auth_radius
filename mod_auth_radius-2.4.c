@@ -776,12 +776,12 @@ make_cookie(request_rec *r,
   /* if you're REALLY worried about what's going on */
 
 #if 0
-  ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server," secret     = %s\n", scr->secret);
-  ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server," user       = %s\n", r->user);
-  ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server," passwd     = %s\n", passwd);
-  ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server," remote ip  = %s\n", c->client_ip);
-  ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server," hostname   = %s\n", hostname);
-  ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server," expiry     = %08x\n", expires);
+  ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server," secret     = %s", scr->secret);
+  ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server," user       = %s", r->user);
+  ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server," passwd     = %s", passwd);
+  ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server," remote ip  = %s", c->client_ip);
+  ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server," hostname   = %s", hostname);
+  ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server," expiry     = %08x", expires);
 #endif
 
   /* MD5 the cookie to make it secure, and add more secret information */
@@ -1298,7 +1298,7 @@ authenticate_basic_user_common(request_rec *r,
     /* are we in a Challenge-Response intermediate state? */
     if (((state = strstr(cookie, APACHE_RADIUS_MAGIC_STATE)) != NULL) &&
         ((state - cookie) == 40)) { /* it's in the right place */
-      ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server, "with RADIUS challenge state set.\n");
+      ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server, "with RADIUS challenge state set.");
       /*
        * If there's an authentication failure, ensure we delete the state.
        * If authentication succeeds, the new cookie will supersede the old.
@@ -1309,17 +1309,17 @@ authenticate_basic_user_common(request_rec *r,
 
       /* valid username, passwd, and expiry date: don't do RADIUS */
     } else if (valid_cookie(r, cookie, sent_pw)) {
-      ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server, "still valid.  Serving page.\n");
+      ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server, "still valid.  Serving page.");
       return OK;
     } else {            /* the cookie has probably expired */
       /* don't bother logging the fact: we probably don't care */
       add_cookie(r, r->err_headers_out, cookie, 0);
       note_challenge_auth_failure(r, r->user, message);
-      ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server,"Invalid or expired. telling browser to delete cookie\n");
+      ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server,"Invalid or expired. telling browser to delete cookie");
       return HTTP_UNAUTHORIZED;
     }
   } else {
-    ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server,"No cookie found.  Trying RADIUS authentication.\n");
+    ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server,"No cookie found.  Trying RADIUS authentication.");
   }
 
 #if 0
@@ -1335,14 +1335,14 @@ authenticate_basic_user_common(request_rec *r,
 
   /* Check the password, and fill in the error string if an error happens */
   if (!(check_pw(r, scr, r->user, sent_pw, state, message, errstr))) {
-    ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server, "RADIUS authentication for user=%s password=%s failed\n",
+    ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server, "RADIUS authentication for user=%s password=%s failed",
         r->user, sent_pw);
     if (!(rec->authoritative)) {
-      ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server, "We're not authoritative.  Never mind.\n");
+      ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server, "We're not authoritative.  Never mind.");
       return DECLINED;        /* never mind */
     }
     note_challenge_auth_failure(r, r->user, message);
-    ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server, "Sending failure message to user=%s\n", r->user);
+    ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server, "Sending failure message to user=%s", r->user);
     return HTTP_UNAUTHORIZED;
   }
 
@@ -1360,10 +1360,10 @@ authenticate_basic_user_common(request_rec *r,
   cookie = make_cookie(r, expires, sent_pw, NULL);
 
   ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server,
-          "RADIUS Authentication for user=%s password=%s OK.  Cookie expiry in %d minutes\n",
+          "RADIUS Authentication for user=%s password=%s OK.  Cookie expiry in %d minutes",
           r->user, sent_pw, min);
 
-  ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server, "Adding cookie %s\n", cookie);
+  ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server, "Adding cookie %s", cookie);
   
   add_cookie(r, r->headers_out, cookie, expires);
 
