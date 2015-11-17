@@ -288,9 +288,7 @@
  */
 
 #include <netdb.h>
-#include <openssl/md5.h>
 #include <sys/stat.h>
-
 #include <sys/types.h>
 #include <unistd.h>
 #include <stdlib.h>
