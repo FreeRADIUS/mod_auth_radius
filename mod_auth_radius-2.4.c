@@ -287,6 +287,7 @@
 
  */
 
+#include <stdint.h>
 #include <netdb.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -322,17 +323,17 @@ module AP_MODULE_DECLARE_DATA radius_auth_module;
 
 /* Per-attribute structure */
 typedef struct attribute_t {
-  unsigned char attribute;
-  unsigned char length;
-  unsigned char data[1];
+  uint8_t attribute;
+  uint8_t length;
+  uint8_t data[1];
 } attribute_t;
 
 /* Packet header structure */
 typedef struct radius_packet_t {
-  unsigned char code;
-  unsigned char id;
-  unsigned short length;
-  unsigned char vector[RADIUS_RANDOM_VECTOR_LEN];
+  uint8_t code;
+  uint8_t id;
+  uint16_t length;
+  uint8_t vector[RADIUS_RANDOM_VECTOR_LEN];
   attribute_t first;
 } radius_packet_t;
 
@@ -384,7 +385,7 @@ typedef struct radius_server_config_struct {
   int timeout;                  /* cookie valid time */
   int wait;                     /* wait for RADIUS server responses */
   int retries;                  /* number of retries on timeout */
-  unsigned short port;          /* RADIUS port number */
+  uint16_t port;                /* RADIUS port number */
   unsigned long bind_address;   /* bind socket to this local address */
   struct radius_server_config_struct *next; /* fallback server(s) */
 } radius_server_config_rec;
@@ -466,7 +467,7 @@ get_ip_addr(apr_pool_t *p, const char *hostname) {
 
 /* get a random vector */
 static void
-get_random_vector(unsigned char vector[RADIUS_RANDOM_VECTOR_LEN]) {
+get_random_vector(uint8_t vector[RADIUS_RANDOM_VECTOR_LEN]) {
   struct timeval tv;
   struct timezone tz;
   static unsigned int session = 1; /* make the random number harder to guess */
@@ -482,8 +483,8 @@ get_random_vector(unsigned char vector[RADIUS_RANDOM_VECTOR_LEN]) {
 
   /* Hash things to get some cryptographically strong pseudo-random numbers */
   apr_md5_init(&my_md5);
-  apr_md5_update(&my_md5, (unsigned char *) &tv, sizeof(tv));
-  apr_md5_update(&my_md5, (unsigned char *) &tz, sizeof(tz));
+  apr_md5_update(&my_md5, (uint8_t *) &tv, sizeof(tv));
+  apr_md5_update(&my_md5, (uint8_t *) &tz, sizeof(tz));
   apr_md5_final(vector, &my_md5);          /* set the final vector */
 }
 
@@ -558,7 +559,7 @@ add_auth_radius(cmd_parms *cmd,
                 const char *secret,
                 const char *wait) {
   radius_server_config_rec *scr;
-  unsigned int port;
+  uint16_t port;
   char *p;
 
   scr = ap_get_module_config(cmd->server->module_config, &radius_auth_module);
@@ -573,7 +574,7 @@ add_auth_radius(cmd_parms *cmd,
     if (port < 1024) {
       return "AddRadiusAuth: server port number must be 1024 or greater for security reasons";
     }
-    scr->port = (unsigned short) port;
+    scr->port = (uint16_t) port;
   }
 
   if ((scr->radius_ip = get_ip_addr(cmd->pool, server)) == NULL) {
@@ -652,10 +653,10 @@ static command_rec auth_cmds[] = {
   { NULL }
 };
 
-static unsigned char *
-xor(unsigned char *p, unsigned char *q, int length) {
+static uint8_t *
+xor(uint8_t *p, uint8_t *q, int length) {
   int i;
-  unsigned char *response = p;
+  uint8_t *response = p;
   
   for (i = 0; i < length; i++)
     *(p++) ^= *(q++);
@@ -665,12 +666,12 @@ xor(unsigned char *p, unsigned char *q, int length) {
 static int
 verify_packet(request_rec *r,
               radius_packet_t *packet,
-              unsigned char vector[RADIUS_RANDOM_VECTOR_LEN]) {
+              uint8_t vector[RADIUS_RANDOM_VECTOR_LEN]) {
   apr_md5_ctx_t my_md5;
   server_rec *s = r->server; 
   radius_server_config_rec *scr;
-  unsigned char calculated[RADIUS_RANDOM_VECTOR_LEN];
-  unsigned char reply[RADIUS_RANDOM_VECTOR_LEN];
+  uint8_t calculated[RADIUS_RANDOM_VECTOR_LEN];
+  uint8_t reply[RADIUS_RANDOM_VECTOR_LEN];
 
   scr = (radius_server_config_rec *) ap_get_module_config (s->module_config, &radius_auth_module);
   
@@ -683,8 +684,8 @@ verify_packet(request_rec *r,
    
   /* MD5(packet header + vector + packet data + secret) */
   apr_md5_init(&my_md5);
-  apr_md5_update(&my_md5, (unsigned char *) packet, ntohs(packet->length));
-  apr_md5_update(&my_md5,  (unsigned char *) scr->secret, scr->secret_len);
+  apr_md5_update(&my_md5, (uint8_t *) packet, ntohs(packet->length));
+  apr_md5_update(&my_md5,  (uint8_t *) scr->secret, scr->secret_len);
   apr_md5_final(calculated, &my_md5);      /* set the final vector */
 
   /* Did he use the same random vector + shared secret? */
@@ -698,11 +699,11 @@ verify_packet(request_rec *r,
 static void
 add_attribute(radius_packet_t *packet,
               int type,
-              const unsigned char *data,
+              const uint8_t *data,
               int length) {
   attribute_t *p;
 
-  p = (attribute_t *)((unsigned char *)packet + packet->length);
+  p = (attribute_t *)((uint8_t *)packet + packet->length);
   p->attribute = type;
   p->length = length + 2;        /* the total size of the attribute */
   packet->length += p->length;
@@ -784,14 +785,14 @@ make_cookie(request_rec *r,
 #endif
 
   /* MD5 the cookie to make it secure, and add more secret information */
-  apr_snprintf(two, COOKIE_SIZE, "%s%s", scr->secret, ap_md5(r->pool, (unsigned char *)one));
+  apr_snprintf(two, COOKIE_SIZE, "%s%s", scr->secret, ap_md5(r->pool, (uint8_t *)one));
 
   if (string == NULL) {
     apr_snprintf(cookie, COOKIE_SIZE, "%s%08x",
-        ap_md5(r->pool, (unsigned char *)two), (unsigned)expires);
+        ap_md5(r->pool, (uint8_t *)two), (unsigned)expires);
   } else {
     apr_snprintf(cookie, COOKIE_SIZE, "%s%08x%s",
-        ap_md5(r->pool, (unsigned char *)two), (unsigned)expires, string);
+        ap_md5(r->pool, (uint8_t *)two), (unsigned)expires, string);
   }
 
   return cookie;
@@ -888,7 +889,7 @@ radius_authenticate(request_rec *r,
                     const char *user,
                     const char *passwd_in,
                     const char *state, 
-                    unsigned char *vector,
+                    uint8_t *vector,
                     char *errstr) {
   struct sockaddr_in *sin;
   struct sockaddr saremote;
@@ -900,13 +901,13 @@ radius_authenticate(request_rec *r,
   int rcode =-1;
   struct in_addr *ip_addr;
   
-  unsigned char misc[RADIUS_RANDOM_VECTOR_LEN];
+  uint8_t misc[RADIUS_RANDOM_VECTOR_LEN];
   int password_len, i;
-  unsigned char password[128];
+  uint8_t password[128];
   apr_md5_ctx_t md5_secret, my_md5;
   uint32_t service;
 
-  unsigned char send_buffer[RADIUS_PACKET_SEND_SIZE];
+  uint8_t send_buffer[RADIUS_PACKET_SEND_SIZE];
   radius_packet_t *packet = (radius_packet_t *) send_buffer;
   radius_dir_config_rec *rec;
 
@@ -935,7 +936,7 @@ radius_authenticate(request_rec *r,
   memcpy(packet->vector, vector, RADIUS_RANDOM_VECTOR_LEN);
 
   /* Fill in the user name attribute */
-  add_attribute(packet, RADIUS_USER_NAME, (unsigned char*)user, strlen(user));
+  add_attribute(packet, RADIUS_USER_NAME, (uint8_t*)user, strlen(user));
 
   /* encrypt the password */
   /* password : e[0] = p[0] ^ MD5(secret + vector) */
@@ -957,11 +958,11 @@ radius_authenticate(request_rec *r,
 
   /* Tell the RADIUS server that we only want to authenticate */
   service = htonl(RADIUS_AUTHENTICATE_ONLY);
-  add_attribute(packet, RADIUS_SERVICE_TYPE, (unsigned char *) &service,
+  add_attribute(packet, RADIUS_SERVICE_TYPE, (uint8_t *) &service,
         sizeof(service));
   
   /* Tell the RADIUS server which virtual server we're coming from */
-  add_attribute(packet, RADIUS_NAS_IDENTIFIER, (unsigned char *)r->server->server_hostname,
+  add_attribute(packet, RADIUS_NAS_IDENTIFIER, (uint8_t *)r->server->server_hostname,
         strlen(r->server->server_hostname));
 
   /* Tell the RADIUS server which IP address we're coming from */
@@ -976,21 +977,21 @@ radius_authenticate(request_rec *r,
     }
   }
 
-  add_attribute(packet, RADIUS_NAS_IP_ADDRESS, (unsigned char *)&ip_addr->s_addr,
+  add_attribute(packet, RADIUS_NAS_IP_ADDRESS, (uint8_t *)&ip_addr->s_addr,
         sizeof(ip_addr->s_addr));
   
   /* add calling station ID (if custom value not specified, add client IP address) */
   if (rec->calling_station_id == NULL) {
-    add_attribute(packet, RADIUS_CALLING_STATION_ID, (unsigned char *)r->connection->client_ip,
+    add_attribute(packet, RADIUS_CALLING_STATION_ID, (uint8_t *)r->connection->client_ip,
             strlen(r->connection->client_ip));
   } else {
-    add_attribute(packet, RADIUS_CALLING_STATION_ID, (unsigned char *)rec->calling_station_id,
+    add_attribute(packet, RADIUS_CALLING_STATION_ID, (uint8_t *)rec->calling_station_id,
             strlen((char *)rec->calling_station_id));
   }
 
   /* add state, if requested */
   if (state != NULL) {
-    add_attribute(packet, RADIUS_STATE, (unsigned char *)state, strlen(state));
+    add_attribute(packet, RADIUS_STATE, (uint8_t *)state, strlen(state));
   }
 
   /* Now that we're done building the packet, we can send it */
@@ -1080,7 +1081,7 @@ radius_authenticate(request_rec *r,
 
 /* Find a particular attribute.  All we really care about is STATE */
 static attribute_t *
-find_attribute(radius_packet_t *packet, unsigned char type) {
+find_attribute(radius_packet_t *packet, uint8_t type) {
   attribute_t *attr = &packet->first;
   int len = ntohs(packet->length) - RADIUS_HEADER_LEN;
 
@@ -1098,7 +1099,7 @@ find_attribute(radius_packet_t *packet, unsigned char type) {
 }
 
 #define radcpy(STRING, ATTR) do { \
-                  unsigned char len = ATTR->length; \
+                  uint8_t len = ATTR->length; \
                   if (len >= 2) len-=2; \
                   memcpy(STRING, ATTR->data, len); \
                   (STRING)[len] = 0;} while (0)
@@ -1115,9 +1116,9 @@ check_pw(request_rec *r,
   struct sockaddr_in *sin;
   struct sockaddr salocal;
   int sockfd;
-  unsigned short local_port;
-  unsigned char vector[RADIUS_RANDOM_VECTOR_LEN];
-  unsigned char recv_buffer[RADIUS_PACKET_RECV_SIZE];
+  uint16_t local_port;
+  uint8_t vector[RADIUS_RANDOM_VECTOR_LEN];
+  uint8_t recv_buffer[RADIUS_PACKET_RECV_SIZE];
   radius_packet_t *packet;
 
   int rcode;
@@ -1136,7 +1137,7 @@ check_pw(request_rec *r,
   local_port = 1025;
   do {
     local_port++;
-    sin->sin_port = htons((unsigned short) local_port);
+    sin->sin_port = htons((uint16_t) local_port);
   } while((bind(sockfd, &salocal, sizeof(struct sockaddr_in)) < 0) && (local_port < 64000));
 
   if (local_port >= 64000) {
