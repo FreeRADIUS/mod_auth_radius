@@ -106,11 +106,11 @@ http://www.example.com/
 
 What's hidden here is that the following files are checked for:
 
-http://www.example.com/
-http://www.example.com/home.html
-http://www.example.com/home.cgi
-http://www.example.com/index.cgi
-http://www.example.com/index.html
+- http://www.example.com/
+- http://www.example.com/home.html
+- http://www.example.com/home.cgi
+- http://www.example.com/index.cgi
+- http://www.example.com/index.html
 
 etc., all in sequence.  This module does a 'stat', and returns "NOT
 FOUND" when anyone tries to access a file which doesn't exist.
