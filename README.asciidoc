@@ -1,63 +1,66 @@
-  Introduction
-  ============
+mod_auth_radius
+===============
 
-  Everyone wants strong authentication over the web.  For us, this means
+Introduction
+------------
+
+Everyone wants strong authentication over the web.  For us, this means
 RADIUS.
 
-  Using static passwords & RADIUS authentication over HTTP is a BAD
+Using static passwords & RADIUS authentication over HTTP is a BAD
 IDEA.  Everyone can sniff the passwords, as they're sent over the net
 in the clear.  We suggest using HTTPS.  RADIUS web authentication is a
 REALLY BAD IDEA if you use the same RADIUS server for web and NAS
 (dial-up) or firewall users.  Then ANYONE can pretend to be you, and
 break through your firewall with minimal effort.
 
-  PLEASE use a different RADIUS server for web authentication and
+PLEASE use a different RADIUS server for web authentication and
 dial-up or firewall users!  If you must use the same server, go for
 one-time passwords.  They're ever so much more secure.
 
-  Also, do NOT have your RADIUS server visible to the external world.
+Also, do NOT have your RADIUS server visible to the external world.
 Doing so makes all kinds of attacks possible.
 
 
-  Configuration
-  =============
+Configuration
+------------
 
-  See the example 'httpd.conf' in this directory for a detailed example
+See the example 'httpd.conf' in this directory for a detailed example
 of the configuration directives.
 
-  You must have at least one authentication method as authoritative.  If
+You must have at least one authentication method as authoritative.  If
 they all return "DECLINED", you get a "server configuration error"
 message.
 
-  AddRadiusAuth configures the RADIUS server name (and optional port).
+AddRadiusAuth configures the RADIUS server name (and optional port).
 You must also specify the shared secret, and tell the RADIUS server
 that the web host machine is a valid RADIUS client.  The optional
 <seconds> field specifies how long Apache waits before giving up, and
 deciding that the RADIUS server is down.  It then returns a "DENIED"
 error.
 
-  If you want, you can specify how long the returned cookies are valid.
+If you want, you can specify how long the returned cookies are valid.
 The time is in minutes, with the magic value of '0' meaning forever.
 
 
-  The per-dir configuration Cookie Valid time does NOT over-ride the
+The per-dir configuration Cookie Valid time does NOT over-ride the
 server configuration.  mod_auth_radius choose the most restrictive of
 the two to use.  This way, a site administrator can say all cookies
 are valid forever, and then make some directories a bit more secure,
 by forcing re-authentication every hour.
 
-  If you want logging, use the standard Apache access log.  A log
+If you want logging, use the standard Apache access log.  A log
 message is generated ONLY when a user has authenticated, and their
 name & file accessed is put in the log file.
 
-  The per-dir AddRadiusCallingStationID configuration option will
+The per-dir AddRadiusCallingStationID configuration option will
 force the calling station ID string (only static strings) and
 include it in authentication requests, if used. If not used, the
 default behavior, using the client's remote IP address will be
 applied.
 
-  How it works
-  ============
+How it works
+------------
 
 The browser requests a page: http://www.example.com/index.html
 
@@ -86,10 +89,10 @@ mod_auth_radius verifies the cookie is valid, and doesn't contact the
 RADIUS server again.
 
 
-  Some warnings
-  =============
+Some warnings
+-------------
 
-  This works fine for static passwords (i.e. "user", "password"), but
+This works fine for static passwords (i.e. "user", "password"), but
 needs a bit more attention for one-time passwords.  All of the
 browsers I've tested don't use the cookie immediately if you're
 accessing a directory as:
@@ -104,7 +107,7 @@ http://www.example.com/home.cgi
 http://www.example.com/index.cgi
 http://www.example.com/index.html
 
-  etc., all in sequence.  This module does a 'stat', and returns "NOT
+etc., all in sequence.  This module does a 'stat', and returns "NOT
 FOUND" when anyone tries to access a file which doesn't exist.
 However, it WILL authenticate for a file which does exists, but the
 browser may not use the returned cookie when accessing a different
@@ -114,76 +117,76 @@ The way to fix this is to point the browser at a specific page. i.e.
 
 http://www.example.com/
 
-  Which points to the page 'index.html' (or similar).  That file
+Which points to the page 'index.html' (or similar).  That file
 should contain text which says "connect to our _secure_ site", where
 _secure_ is a link to a specific *page*, not a *directory*.  e.g.
 
 http://www.example.com/secure/index.html
 
-  If you do not add in 'index.html' in the link, it won't work
+If you do not add in 'index.html' in the link, it won't work
 properly.
 
-  This method ensures that users are only authenticated once for the
+This method ensures that users are only authenticated once for the
 secure pages, and not multiple times.
 
-  People using static passwords don't need to do this, but if they
+People using static passwords don't need to do this, but if they
 don't, they'll notice that their RADIUS server is getting 1-4 hits for
 every web authentication request.
 
 
-  Some browsers (I.E.) have a problem with sending cookies on initial
+Some browsers (I.E.) have a problem with sending cookies on initial
 requests. If you have a file index.html which includes img/foo.gif in
 the same directory.  The user authenticates, reads index.html (with
 the cookie in the request header), BUT on reading the gifs, the cookie
 is NOT included.
 
-  This problem can be avoided by EITHER putting the gifs in the same
+This problem can be avoided by EITHER putting the gifs in the same
 directory as the index.html file, or putting moving the entire tree
 down a node, and having a NEW index.html which points to
 ./moved/index.html This is ridiculously ugly, but it seems to work.
 
 
-  About the cookies
-  =================
+About the cookies
+-----------------
 
-  The cookies are valid for a specified time, or until the browser
+The cookies are valid for a specified time, or until the browser
 dies.  mod_auth_radius will forcibly try to expire cookies that it
 thinks are too old.  If your browser doesn't expire the cookie, you'll
 see an authorization required message over and over.  You must then
 exit the browser, and re-load the web page.
 
 
-  Challenge-Response support
-  ==========================
+Challenge-Response support
+--------------------------
 
-  This module also supports the full RADIUS challenge-response
+This module also supports the full RADIUS challenge-response
 mechanism.  From the user's perspective, on authenticatation, type in
 username & garbage (or NUL) password.  Click <OK>, and you'll get an
 authentication failure.  This is fine, as mod_auth_radius has secretly
 set a cookie, and modified the Basic-Authentication-Realm.
 
-  When the authentication fails, click <OK> to continue, and you'll
+When the authentication fails, click <OK> to continue, and you'll
 get another username/password authentication window.  This time,
 however, you'll see your username displayed, along with the RADIUS
 Reply-Message at the top of the authentication window.  This message
 usually includes a challenge.
 
-  Type in your username, and put the response to the challenge in the
+Type in your username, and put the response to the challenge in the
 password field.  Click <OK> again, and you should be authenticated.
 
-  The secret is that cookies are being magically set back and forth,
+The secret is that cookies are being magically set back and forth,
 and these cookies include the RADIUS state variable.
 
-  The challenge-response works on Netscape 3.x and 4.x, HotJava, but
+The challenge-response works on Netscape 3.x and 4.x, HotJava, but
 NOT on Internet Explorer.  I.E. does not appear to follow the relevant
 RFCs properly.
 
 
-  Other
-  =====
+Other
+-----
 
-  Any questions or comments can be sent to the FreeRADIUS users list
+Any questions or comments can be sent to the FreeRADIUS users list
 http://freeradius.org/list/index.html. 
 
---
+
 Author:  Alan DeKok <aland@freeradius.org>
