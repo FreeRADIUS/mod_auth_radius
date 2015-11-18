@@ -397,23 +397,15 @@ module AP_MODULE_DECLARE_DATA radius_auth_module;
 
 /* per-server configuration structure */
 typedef struct radius_server_config_rec_s {
-	struct in_addr *radius_ip;
-	/* server IP address */
-	char *secret;
-	/* server shared secret */
-	int secret_len;
-	/* length of the secret (to save time later) */
-	int timeout;
-	/* cookie valid time */
-	int wait;
-	/* wait for RADIUS server responses */
-	int retries;
-	/* number of retries on timeout */
-	uint16_t port;
-	/* RADIUS port number */
-	unsigned long bind_address;
-	/* bind socket to this local address */
-	struct radius_server_config_rec_s *next; /* fallback server(s) */
+	struct in_addr *radius_ip;			/* server IP address */
+	char *secret;					/* server shared secret */
+	int secret_len;					/* length of the secret (to save time later) */
+	int timeout;					/* cookie valid time */
+	int wait;					/* wait for RADIUS server responses */
+	int retries;					/* number of retries on timeout */
+	uint16_t port;					/* RADIUS port number */
+	unsigned long bind_address;			/* bind socket to this local address */
+	struct radius_server_config_rec_s *next;	/* fallback server(s) */
 } radius_server_config_rec_t;
 
 /* per-server configuration create */
@@ -422,13 +414,13 @@ static void *radius_server_config_alloc(apr_pool_t *p, server_rec *s)
 	radius_server_config_rec_t *scr;
 
 	scr = (radius_server_config_rec_t *)apr_pcalloc(p, sizeof(radius_server_config_rec_t));
-	scr->radius_ip = NULL;            /* no server yet */
-	scr->port = RADIUS_AUTH_UDP_PORT; /* set the default port */
-	scr->secret = NULL;               /* no secret yet */
+	scr->radius_ip = NULL;            		/* no server yet */
+	scr->port = RADIUS_AUTH_UDP_PORT;		/* set the default port */
+	scr->secret = NULL;               		/* no secret yet */
 	scr->secret_len = 0;
-	scr->wait = 5;                    /* wait 5 sec before giving up on the packet */
-	scr->retries = 0;                 /* no additional retries */
-	scr->timeout = 60;                /* valid for one hour by default */
+	scr->wait = 5;                    		/* wait 5 sec before giving up on the packet */
+	scr->retries = 0;                 		/* no additional retries */
+	scr->timeout = 60;                		/* valid for one hour by default */
 	scr->bind_address = INADDR_ANY;
 	scr->next = NULL;
 
@@ -453,17 +445,17 @@ static void *radius_server_config_merge(apr_pool_t *p,
 					void *newloc_config)
 {
 	radius_server_config_rec_t *merged_config = radius_server_config_alloc(p, NULL);
-	radius_server_config_rec_t *old_configig = (radius_server_config_rec_t *)parent_config;
+	radius_server_config_rec_t *old_config = (radius_server_config_rec_t *)parent_config;
 	radius_server_config_rec_t *new_config = (radius_server_config_rec_t *)newloc_config;
 	void *result = NULL;
 
-	result = (new_config->radius_ip == NULL) ? old_configig->radius_ip : new_config->radius_ip;
+	result = (new_config->radius_ip == NULL) ? old_config->radius_ip : new_config->radius_ip;
 	if (result != NULL) {
 		merged_config->radius_ip = apr_pcalloc(p, sizeof(struct in_addr));
 		*merged_config->radius_ip = *((struct in_addr *)result); /* make a copy */
 	}
 
-	result = (new_config->secret == NULL) ? old_configig->secret : new_config->secret;
+	result = (new_config->secret == NULL) ? old_config->secret : new_config->secret;
 	if (result != NULL) {
 		merged_config->secret = apr_pstrdup(p, (char *)result); /* make a copy */
 		merged_config->secret_len = strlen(merged_config->secret);
