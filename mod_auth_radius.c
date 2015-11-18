@@ -309,12 +309,18 @@
 #include "apr_general.h"
 #include "apr_tables.h"
 #include "apr_strings.h"
-/* Apache 2.1+ */
+#include "ap_release.h"
 #include "ap_provider.h"
 #include "mod_auth.h"
-
-/* Apache 2.4+ */
 #include "http_request.h"
+
+#if !defined(AP_SERVER_MAJORVERSION_NUMBER) || !defined(AP_SERVER_MINORVERSION_NUMBER)
+#   error "Where is the 'ap_release.h'?"
+#endif
+
+#if !(AP_SERVER_MAJORVERSION_NUMBER == 2 && AP_SERVER_MINORVERSION_NUMBER == 4)
+#   error "We only support the apache version >= 2.4"
+#endif
 
 module AP_MODULE_DECLARE_DATA radius_auth_module;
 
