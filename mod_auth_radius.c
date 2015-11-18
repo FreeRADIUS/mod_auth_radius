@@ -315,7 +315,7 @@
 #include "http_request.h"
 
 #if AP_SERVER_MAJORVERSION_NUMBER >= 2 && AP_SERVER_MINORVERSION_NUMBER >= 4
-  #define client_ip_get(_r) (_r->connection->useragent_ip)
+  #define client_ip_get(_r) (_r->useragent_ip)
 #else
   #define client_ip_get(_r) (_r->connection->remote_ip)
 #endif
