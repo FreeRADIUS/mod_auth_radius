@@ -316,7 +316,7 @@
 /* Apache 2.4+ */
 #include "http_request.h"
 
-module AP_MODULE_DECLARE_DATAradius_auth_module;
+module AP_MODULE_DECLARE_DATA radius_auth_module;
 
 #define RADLOG_DEBUG(srv, fmt, ...) ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, srv, fmt,  ## __VA_ARGS__)
 #define RADLOG_WARN(srv, fmt, ...) ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_WARNING, 0, srv, fmt,  ## __VA_ARGS__)
@@ -393,38 +393,30 @@ static const char *cookie_name = "RADIUS";
 
 /* per-server configuration structure */
 typedef struct radius_server_config_rec_s {
-	struct in_addr *radius_ip;
-	/* server IP address */
-	char *secret;
-	/* server shared secret */
-	int secret_len;
-	/* length of the secret (to save time later) */
-	int timeout;
-	/* cookie valid time */
-	int wait;
-	/* wait for RADIUS server responses */
-	int retries;
-	/* number of retries on timeout */
-	uint16_t port;
-	/* RADIUS port number */
-	unsigned long bind_address;
-	/* bind socket to this local address */
-	struct radius_server_config_rec_s *next; /* fallback server(s) */
+    struct in_addr *radius_ip;    /* server IP address */
+    char *secret;                 /* server shared secret */
+    int secret_len;               /* length of the secret (to save time later) */
+    int timeout;                  /* cookie valid time */
+    int wait;                     /* wait for RADIUS server responses */
+    int retries;                  /* number of retries on timeout */
+    uint16_t port;                /* RADIUS port number */
+    unsigned long bind_address;   /* bind socket to this local address */
+    struct radius_server_config_rec_s *next; /* fallback server(s) */
 } radius_server_config_rec_t;
 
 /* per-server configuration create */
-static void *radius_server_config_alloc(apr_pool_t *p, server_rec *s)
+static void *radius_server_config_rec_alloc(apr_pool_t *p, server_rec *s)
 {
 	radius_server_config_rec_t *scr;
 
 	scr = (radius_server_config_rec_t *)apr_pcalloc(p, sizeof(radius_server_config_rec_t));
 	scr->radius_ip = NULL;            /* no server yet */
 	scr->port = RADIUS_AUTH_UDP_PORT; /* set the default port */
-	scr->secret = NULL;               /* no secret yet */
-	scr->secret_len = 0;
 	scr->wait = 5;                    /* wait 5 sec before giving up on the packet */
 	scr->retries = 0;                 /* no additional retries */
 	scr->timeout = 60;                /* valid for one hour by default */
+	scr->secret = NULL;               /* no secret yet */
+	scr->secret_len = 0;
 	scr->bind_address = INADDR_ANY;
 	scr->next = NULL;
 
@@ -444,7 +436,7 @@ static void *radius_server_config_alloc(apr_pool_t *p, server_rec *s)
  * The return value is a pointer to the created module-specific structure
  * containing the merged values.
  */
-static void *radius_server_config_merge(apr_pool_t *p,
+static void *radius_server_config_rec_merge(apr_pool_t *p,
 					void *parent_config,
 					void *newloc_config)
 {
@@ -1441,8 +1433,8 @@ radius_auth_module = {
 	STANDARD20_MODULE_STUFF,
 	radius_per_directory_config_alloc,	/* dir config creater */
 	radius_per_directory_config_merge,	/* dir merger --- default is to override */
-	radius_server_config_alloc,		/* server config */
-	radius_server_config_merge,		/* merge server config */
+	radius_server_config_rec_alloc,		/* server config */
+	radius_server_config_rec_merge,		/* merge server config */
 	auth_cmds,                      	/* command apr_table_t */
 	register_hooks				/* register hooks */
 };
