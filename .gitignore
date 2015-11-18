@@ -4,3 +4,6 @@
 *.slo
 .libs/
 *.so
+*.o
+CMakeLists.txt
+.idea
