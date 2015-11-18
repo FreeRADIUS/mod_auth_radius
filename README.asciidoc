@@ -1,8 +1,14 @@
 mod_auth_radius
 ===============
 
-Introduction
-------------
+0. Branch state
+---------------
+
+[[build_state]]
+image::https://travis-ci.org/FreeRADIUS/mod_auth_radius.svg[]
+
+1. Introduction
+---------------
 
 Everyone wants strong authentication over the web.  For us, this means
 RADIUS.
@@ -22,8 +28,8 @@ Also, do NOT have your RADIUS server visible to the external world.
 Doing so makes all kinds of attacks possible.
 
 
-Configuration
-------------
+2. Configuration
+----------------
 
 See the example 'httpd.conf' in this directory for a detailed example
 of the configuration directives.
@@ -59,8 +65,8 @@ include it in authentication requests, if used. If not used, the
 default behavior, using the client's remote IP address will be
 applied.
 
-How it works
-------------
+3. How it works
+---------------
 
 The browser requests a page: http://www.example.com/index.html
 
@@ -89,8 +95,8 @@ mod_auth_radius verifies the cookie is valid, and doesn't contact the
 RADIUS server again.
 
 
-Some warnings
--------------
+4. Some warnings
+----------------
 
 This works fine for static passwords (i.e. "user", "password"), but
 needs a bit more attention for one-time passwords.  All of the
@@ -146,8 +152,8 @@ down a node, and having a NEW index.html which points to
 ./moved/index.html This is ridiculously ugly, but it seems to work.
 
 
-About the cookies
------------------
+5. About the cookies
+--------------------
 
 The cookies are valid for a specified time, or until the browser
 dies.  mod_auth_radius will forcibly try to expire cookies that it
@@ -156,8 +162,8 @@ see an authorization required message over and over.  You must then
 exit the browser, and re-load the web page.
 
 
-Challenge-Response support
---------------------------
+6. Challenge-Response support
+-----------------------------
 
 This module also supports the full RADIUS challenge-response
 mechanism.  From the user's perspective, on authenticatation, type in
@@ -182,8 +188,8 @@ NOT on Internet Explorer.  I.E. does not appear to follow the relevant
 RFCs properly.
 
 
-Other
------
+7. Other
+--------
 
 Any questions or comments can be sent to the FreeRADIUS users list
 http://freeradius.org/list/index.html. 
