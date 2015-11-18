@@ -30,6 +30,11 @@ AuthBasicProvider radius
 AuthRadiusCookieValid 5
 
 #
+# Set the debug mode
+#
+#AuthRadiusDebug on
+
+#
 # Set the use of RADIUS authentication at this <Location>"
 #
 # Locally set the RADIUS authentication active.
