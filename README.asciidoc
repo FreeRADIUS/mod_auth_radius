@@ -4,8 +4,7 @@ mod_auth_radius
 0. Branch state
 ---------------
 
-[[build_state]]
-image::https://travis-ci.org/FreeRADIUS/mod_auth_radius.svg[]
+image:https://travis-ci.org/FreeRADIUS/mod_auth_radius.svg?branch=master["Build Status", link="https://travis-ci.org/FreeRADIUS/mod_auth_radius"]
 
 1. Introduction
 ---------------
