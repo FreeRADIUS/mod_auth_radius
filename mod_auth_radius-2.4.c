@@ -732,7 +732,7 @@ make_cookie(request_rec *r,
     scr = (radius_server_config_rec *)ap_get_module_config (s->module_config, &radius_auth_module);
     
     if ((hostname = ap_get_remote_host(c, r->per_dir_config, REMOTE_NAME, NULL)) == NULL)
-      hostname = "no.one@example.com";
+      hostname = "www.example.com";
   
     /*
      * Arg! We can't use 'ntohs(c->remote_addr.sin_port)', because I.E.
