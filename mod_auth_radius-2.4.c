@@ -400,7 +400,7 @@ typedef struct radius_server_config_rec_s {
 
 /* per-server configuration create */
 static void *
-create_radius_server_cfg_rec(apr_pool_t *p,
+radius_server_cfg_rec_alloc(apr_pool_t *p,
                              server_rec *s) {
     radius_server_config_rec_t *scr;
 
@@ -432,10 +432,10 @@ create_radius_server_cfg_rec(apr_pool_t *p,
  * containing the merged values.
  */
 static void *
-merge_radius_server_cfg_rec(apr_pool_t * p,
+radius_server_cfg_rec_merge(apr_pool_t * p,
                         void *parent_conf,
                         void *newloc_conf) {
-    radius_server_config_rec_t *mrg_cfg = create_radius_server_cfg_rec(p, NULL);
+    radius_server_config_rec_t *mrg_cfg = radius_server_cfg_rec_alloc(p, NULL);
     radius_server_config_rec_t *pcfg1 = (radius_server_config_rec_t *)parent_conf;
     radius_server_config_rec_t *pcfg2 = (radius_server_config_rec_t *)newloc_conf;
     void *result = NULL;
@@ -509,7 +509,7 @@ typedef struct radius_dir_cfg_rec_s {
 
 /* Per-dir configuration create */
 static void *
-create_radius_dir_cfg_rec (apr_pool_t *p,
+radius_dir_cfg_rec_alloc (apr_pool_t *p,
                            char *d) {
     radius_dir_cfg_rec_t *rec;
 
@@ -540,10 +540,10 @@ create_radius_dir_cfg_rec (apr_pool_t *p,
  * containing the merged values.
  */
 static void *
-merge_radius_dir_cfg_rec(apr_pool_t *p,
+radius_dir_cfg_rec_merge(apr_pool_t *p,
                          void *parent_conf,
                          void *newloc_conf) {
-    radius_dir_cfg_rec_t *mrg_cfg = create_radius_dir_cfg_rec(p, NULL);
+    radius_dir_cfg_rec_t *mrg_cfg = radius_dir_cfg_rec_alloc(p, NULL);
     radius_dir_cfg_rec_t *pcfg1 = (radius_dir_cfg_rec_t *)parent_conf;
     radius_dir_cfg_rec_t *pcfg2 = (radius_dir_cfg_rec_t *)newloc_conf;
     void *result = NULL;
@@ -1435,10 +1435,11 @@ static void register_hooks(apr_pool_t *p) {
 module AP_MODULE_DECLARE_DATA radius_auth_module =
 {
     STANDARD20_MODULE_STUFF,
-    create_radius_dir_cfg_rec,   /* dir config creater */
-    merge_radius_dir_cfg_rec,    /* dir merger --- default is to override */
-    create_radius_server_cfg_rec,/* server config */
-    merge_radius_server_cfg_rec, /* merge server config */
+    radius_dir_cfg_rec_alloc,    /* dir config creater */
+    radius_dir_cfg_rec_merge,    /* dir merger --- default is to override */
+    radius_server_cfg_rec_alloc, /* server config */
+    radius_server_cfg_rec_merge, /* merge server config */
     auth_cmds,                   /* command apr_table_t */
     register_hooks               /* register hooks */
 };
+
