@@ -306,6 +306,7 @@
 
 module AP_MODULE_DECLARE_DATA radius_auth_module;
 
+#define USE_LOCAL_CACHE
 
 /*
   RFC 2138 says that this port number is wrong, but everyone's using it.
@@ -367,6 +368,16 @@ typedef struct radius_packet_t {
 #define TRUE !FALSE
 #endif
 
+#ifdef USE_LOCAL_CACHE
+// How long user authentication information should persist
+// in the local cache tables
+#define LOCAL_CACHE_EXPIRE_TIME_SEC 30        
+// A unique return value when a user is successfully 
+// authenticated using local cache instead of a 
+// RADIUS server
+#define LOCAL_CACHE_AUTH_SUCCESS 2048
+#endif
+
 /* per-server configuration structure */
 typedef struct radius_server_config_struct {
   struct in_addr *radius_ip;	/* server IP address */
@@ -378,6 +389,10 @@ typedef struct radius_server_config_struct {
   unsigned short port;		/* RADIUS port number */
   unsigned long bind_address;	/* bind socket to this local address */
   struct radius_server_config_struct *next; /* fallback server(s) */
+#ifdef USE_LOCAL_CACHE
+  apr_table_t *cache_expire_table; /* a table that stores cache expire times */
+  apr_table_t *cache_table; /* a table to store auth cache in */
+#endif
 } radius_server_config_rec;
 
 /* per-server configuration create */
@@ -395,7 +410,12 @@ create_radius_server_config(apr_pool_t *p, server_rec *s)
   scr->timeout = 60;		/* valid for one hour by default */
   scr->bind_address = INADDR_ANY;
   scr->next = NULL;
-
+#ifdef USE_LOCAL_CACHE
+  // Cache tables that are used to store authentication information locally.
+  // these need to be stored at this level so that they can persist.
+  scr->cache_expire_table = apr_table_make(p, 32);
+  scr->cache_table = apr_table_make(p, 32);
+#endif
   return scr;
 }
 
@@ -789,60 +809,29 @@ spot_cookie(request_rec *r)
   return NULL;                        /* no cookie was found */
 }
 
-/* There's a lot of parameters to this function, but it does a lot of work */
-static int
-radius_authenticate(request_rec *r, radius_server_config_rec *scr, 
-		    int sockfd, int code, char *recv_buffer,
-		    const char *user, const char *passwd_in, const char *state, 
-		    unsigned char *vector, char *errstr)
+// the contents of this function used to exist exclusively in
+// radius_authenticate. it was migrated to its own function -- 
+// essentially verbatim -- by nmadura@umich.edu to support 
+// the local caching mechanism
+static int 
+radius_xor_password(unsigned char *passwd_out, request_rec *r, radius_server_config_rec *scr, 
+		const unsigned char *vector, const unsigned char *passwd_in)
 {
-  struct sockaddr_in *sin;
-  struct sockaddr saremote;
-  int salen, total_length;
-  fd_set set;
-  int retries = scr->retries;
-  struct timeval tv;
-  int rcode;
-  struct in_addr *ip_addr;
-  
   unsigned char misc[RADIUS_RANDOM_VECTOR_LEN];
+  apr_md5_ctx_t md5_secret, my_md5;
   int password_len, i;
   unsigned char password[128];
-  apr_md5_ctx_t md5_secret, my_md5;
-  uint32_t service;
-
-  unsigned char send_buffer[RADIUS_PACKET_SEND_SIZE];
-  radius_packet_t *packet = (radius_packet_t *) send_buffer;
-  radius_dir_config_rec *rec =
-    (radius_dir_config_rec *)ap_get_module_config (r->per_dir_config, &radius_auth_module);
 
   i = strlen(passwd_in);
   password_len = (i + 0x0f) & 0xfffffff0; /* round off to 16 */
   if (password_len == 0) {
     password_len = 16;		/* it's at least 15 bytes long */
   } else if (password_len > 128) { /* password too long, from RFC2138, p.22 */
-    ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0,r->server,"password given by user %s is too long for RADIUS", user);
     return FALSE;
   }
-  
+
   memset(password, 0, password_len);
   memcpy(password, passwd_in, i); /* don't use strcpy! */
-  
-  /* ************************************************************ */
-  /* generate a random authentication vector */
-  get_random_vector(vector);
-
-  /* ************************************************************ */
-  /* Fill in the packet header */
-  memset(send_buffer, 0, sizeof(send_buffer));
-
-  packet->code = code;
-  packet->id = vector[0];	/* make a random request id */
-  packet->length = RADIUS_HEADER_LEN;
-  memcpy(packet->vector, vector, RADIUS_RANDOM_VECTOR_LEN);
-
-  /* Fill in the user name attribute */
-  add_attribute(packet, RADIUS_USER_NAME, user, strlen(user));
 
   /* ************************************************************ */
   /* encrypt the password */
@@ -860,6 +849,233 @@ radius_authenticate(request_rec *r, radius_server_config_rec *scr,
     apr_md5_update(&my_md5, &password[(i-1) * RADIUS_PASSWORD_LEN], RADIUS_PASSWORD_LEN);
     apr_md5_final(misc, &my_md5);      /* set the final vector */
     xor(&password[i * RADIUS_PASSWORD_LEN], misc, RADIUS_PASSWORD_LEN);
+  }
+
+  // copy the password to its destination
+  memset(passwd_out, 0, password_len);
+  memcpy(passwd_out, password, password_len);
+
+  return password_len;
+}
+
+#ifdef USE_LOCAL_CACHE
+
+/* ************************************************************** */
+/* radius_expire_cache                                            */
+/* summary:  checks the cache tables for users that have exceeded */
+/*           the time to remain in the cache, and removes any     */
+/*           user names that have exceeded that time.             */
+/* returns:  unused                                               */
+/* added by: nmadura@umich.edu                                    */
+/* ************************************************************** */
+static int
+radius_expire_cache(request_rec *r, radius_server_config_rec *scr)
+{
+  // if the table is empty bail
+  if (apr_is_empty_table(scr->cache_expire_table) == TRUE)
+	  return 0;
+
+  // get a list of all the elements in the expire table
+  const apr_array_header_t *tarr = apr_table_elts(scr->cache_expire_table);
+  const apr_table_entry_t *telts = (const apr_table_entry_t*)tarr->elts;
+
+  apr_array_header_t *elements_to_remove = apr_array_make(r->pool, 2, sizeof(const char*));
+  int i;
+  time_t now = time(NULL);
+
+  // loop through the elements of the table checking if
+  // any of the expiration times have been passed,
+  // if they have add them to an array of user names to expire
+  for (i = 0; i < tarr->nelts; i++) {
+	 time_t time = (time_t)atoi(telts[i].val);
+	 if (time <= now)
+	 {
+	   char usr[50];
+	   apr_snprintf(usr, 50, telts[i].key);
+		// the non-persistance of this string is OK, because we 
+		// only use it in this function
+	   *(char **)apr_array_push(elements_to_remove) = usr;
+	 }
+  }	  
+
+  // if the list of user names to expire is empty bail
+  if (apr_is_empty_array(elements_to_remove))
+	  return 0;
+
+  // unset expire times and cached values for each user name
+  // in the array
+  for (i = 0; i < elements_to_remove->nelts; i++) {
+    const char *s = ((const char**)elements_to_remove->elts)[i];
+    ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server, 
+      "local cache expiring user %s", s);
+	 apr_table_unset(scr->cache_expire_table, s);
+	 apr_table_unset(scr->cache_table, s);
+  }
+
+  apr_array_clear(elements_to_remove);
+
+  return 0;
+}
+
+/* ************************************************************** */
+/* radius_cache_authenticate                                      */
+/* summary:  attempts to authenticate a user from a set of cache  */
+/*           tables to reduce the strain on a RADIUS server that  */
+/*           may be applied by a connection that does not support */
+/*           cookies, for example: svn                            */
+/*           This function first cleans any old data by calling   */
+/*           radius_expire_cache, then searches for the user. if  */
+/*           a user is found, the password is unmangled and       */
+/*           compared. If the passwords match, the expiration     */
+/*           time is updated.                                     */
+/* returns:  TRUE if the user exists and the password matches     */
+/*           otherwise it returns FALSE                           */
+/* added by: nmadura@umich.edu                                    */
+/* ************************************************************** */
+static int
+radius_cache_authenticate(request_rec *r, radius_server_config_rec *scr,
+  const char *user, const char *passwd_in)
+{
+  // First expire any cached password
+  radius_expire_cache(r, scr);
+
+  // Try to get the entry for the current user from the cache
+  const char *passwd_mash = apr_table_get(scr->cache_table, user);
+  if (passwd_mash == NULL)
+  {
+		ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server,
+		 "local cache user not found %s", user);
+	  return FALSE;
+  }
+  ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server,
+	 "local cache found user %s", user);
+  // Extract the vector
+  unsigned char vector[RADIUS_RANDOM_VECTOR_LEN];
+  memset(&vector, 0, RADIUS_RANDOM_VECTOR_LEN);
+  memcpy(&vector, passwd_mash, RADIUS_RANDOM_VECTOR_LEN);
+  // Determine the length of the password
+  int password_len = (int)passwd_mash[RADIUS_RANDOM_VECTOR_LEN];
+  // Extract the password
+  char passwd[password_len];
+  memset(&passwd, 0, password_len);
+  memcpy(&passwd, &passwd_mash[RADIUS_RANDOM_VECTOR_LEN + 1], password_len);
+  // XOR the password
+  char password[password_len];
+  radius_xor_password(password, r, scr, vector, passwd);
+  // Compare the passwords
+  // use the length of the incoming password because it may
+  // not be rounded at 16 bits
+  int passwd_in_len = strlen(passwd_in);
+  if (memcmp(&password, passwd_in, passwd_in_len) == 0)
+  {
+	  ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server,
+		 "local cache password matches for user %s, OK to skip sending RADIUS packet", user);
+	  time_t expires = time(NULL) + LOCAL_CACHE_EXPIRE_TIME_SEC;
+	  char exp[11];
+	  apr_snprintf(exp, 11, "%d", expires);
+	  // Update the expire table
+	  apr_table_set(scr->cache_expire_table, user, exp);
+	  return TRUE;
+  }
+  else
+  {
+	  ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server,
+		 "local cache password does not match for user %s", user);
+	  return FALSE;
+  }
+}
+
+/* ************************************************************** */
+/* radius_store_cache_authenticate                                */
+/* summary:  stores the user and password information for the     */
+/*           given user into the local cache, the expiration time */
+/*           is set for now + LOCAL_CACHE_EXPIRE_TIME_SEC.        */
+/*           The password is stored in its xor'd form so that     */
+/*           the password string isn't resident in memory         */
+/* returns:  unused                                               */
+/* added by: nmadura@umich.edu                                    */
+/* ************************************************************** */
+static int
+radius_store_cache_authenticate(request_rec *r, radius_server_config_rec *scr, const char *user,
+		const unsigned char *vector, const unsigned char *password, int password_len)
+{
+  int passlen = RADIUS_RANDOM_VECTOR_LEN + password_len + 1;
+  unsigned char pass[passlen];
+  
+  // the time that this cache will expire
+  time_t expires = time(NULL) + LOCAL_CACHE_EXPIRE_TIME_SEC;
+  char exp[11];
+  apr_snprintf(exp, 11, "%d", expires);
+
+  // mangle the password, store the vector, the length of the password
+  // and the password
+  memset(&pass, 0, passlen);
+  memcpy(&pass, vector, RADIUS_RANDOM_VECTOR_LEN);
+  pass[RADIUS_RANDOM_VECTOR_LEN] = (unsigned char)password_len;
+  memcpy(&pass[RADIUS_RANDOM_VECTOR_LEN + 1], password, password_len);
+
+  ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server,
+	 "local cache adding user %s", user);
+
+  // add the password and expiration time to the appropriate tables
+  apr_table_set(scr->cache_table, user, pass);
+  apr_table_set(scr->cache_expire_table, user, exp);
+
+  return 0;
+}
+
+#endif
+
+/* There's a lot of parameters to this function, but it does a lot of work */
+static int
+radius_authenticate(request_rec *r, radius_server_config_rec *scr, 
+		    int sockfd, int code, char *recv_buffer,
+		    const char *user, const char *passwd_in, const char *state, 
+		    unsigned char *vector, char *errstr)
+{
+
+#ifdef USE_LOCAL_CACHE
+  // shortcut the auth process if we have cached authentication
+  if (radius_cache_authenticate(r, scr, user, passwd_in))
+	  return LOCAL_CACHE_AUTH_SUCCESS;
+#endif
+
+  struct sockaddr_in *sin;
+  struct sockaddr saremote;
+  int salen, total_length;
+  fd_set set;
+  int retries = scr->retries;
+  struct timeval tv;
+  int rcode;
+  struct in_addr *ip_addr;
+  
+  unsigned char password[128];
+  uint32_t service;
+
+  unsigned char send_buffer[RADIUS_PACKET_SEND_SIZE];
+  radius_packet_t *packet = (radius_packet_t *) send_buffer;
+  
+  /* ************************************************************ */
+  /* generate a random authentication vector */
+  get_random_vector(vector);
+
+  /* ************************************************************ */
+  /* Fill in the packet header */
+  memset(send_buffer, 0, sizeof(send_buffer));
+
+  packet->code = code;
+  packet->id = vector[0];	/* make a random request id */
+  packet->length = RADIUS_HEADER_LEN;
+  memcpy(packet->vector, vector, RADIUS_RANDOM_VECTOR_LEN);
+
+  /* Fill in the user name attribute */
+  add_attribute(packet, RADIUS_USER_NAME, user, strlen(user));
+
+  int password_len = radius_xor_password(password, r, scr, vector, passwd_in);
+  if (!password_len)
+  {
+    ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0,r->server,"password given by user %s is too long for RADIUS", user);
+	 return FALSE;
   }
   add_attribute(packet, RADIUS_PASSWORD, password, password_len);
 
@@ -893,6 +1109,8 @@ radius_authenticate(request_rec *r, radius_server_config_rec *scr,
   
   /* ************************************************************ */
   /* add calling station ID (if custom value not specified, add client IP address) */
+  radius_dir_config_rec *rec =
+    (radius_dir_config_rec *)ap_get_module_config (r->per_dir_config, &radius_auth_module);
   if (rec->calling_station_id == NULL) {
     add_attribute(packet, RADIUS_CALLING_STATION_ID, r->connection->remote_ip, strlen(r->connection->remote_ip));
   } else {
@@ -988,6 +1206,15 @@ radius_authenticate(request_rec *r, radius_server_config_rec *scr,
     return FALSE;
   }
   
+#ifdef USE_LOCAL_CACHE
+  // if the packet received is an ACCESS_ACCEPT
+  // store the auth information in the local cache
+  if (packet->code == RADIUS_ACCESS_ACCEPT)
+  {
+    radius_store_cache_authenticate(r, scr, user, vector, password, password_len);
+  }
+#endif
+
   return TRUE;
 }
 
@@ -1063,6 +1290,15 @@ check_pw(request_rec *r, radius_server_config_rec *scr, const char *user, const 
   if (rcode == FALSE) {
     return FALSE;		/* error out */
   }
+
+#ifdef USE_LOCAL_CACHE
+  // if we were authenticated because of our local cache
+  // we need to shortcut the rest of this function, because
+  // there is no packet.
+  if (rcode == LOCAL_CACHE_AUTH_SUCCESS)
+    return TRUE;
+#endif
+
   
   packet = (radius_packet_t *) recv_buffer;
 
