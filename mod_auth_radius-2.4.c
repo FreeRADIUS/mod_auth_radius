@@ -313,6 +313,9 @@
 
 module AP_MODULE_DECLARE_DATA radius_auth_module;
 
+#define RADLOG_DEBUG(srv,fmt,...) ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, srv, fmt,  ## __VA_ARGS__)
+#define RADLOG_WARN(srv,fmt,...) ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_WARNING, 0, srv, fmt,  ## __VA_ARGS__)
+
 /*
   RFC 2138 says that this port number is wrong, but everyone's using it.
   Use " AddRadiusAuth server:port secret " to change the port manually.
@@ -777,12 +780,12 @@ make_cookie(request_rec *r,
 /* if you're REALLY worried about what's going on */
   
 #if 0
-    ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server," secret     = %s", scr->secret);
-    ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server," user       = %s", r->user);
-    ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server," passwd     = %s", passwd);
-    ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server," remote ip  = %s", c->client_ip);
-    ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server," hostname   = %s", hostname);
-    ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server," expiry     = %08x", expires);
+    RADLOG_DEBUG(r->server," secret     = %s", scr->secret);
+    RADLOG_DEBUG(r->server," user       = %s", r->user);
+    RADLOG_DEBUG(r->server," passwd     = %s", passwd);
+    RADLOG_DEBUG(r->server," remote ip  = %s", c->client_ip);
+    RADLOG_DEBUG(r->server," hostname   = %s", hostname);
+    RADLOG_DEBUG(r->server," expiry     = %08x", expires);
 #endif
   
     /* MD5 the cookie to make it secure, and add more secret information */
@@ -854,7 +857,7 @@ spot_cookie(request_rec *r) {
     if ((cookie = apr_table_get(r->headers_in, "Cookie"))) {
         if ((value = strstr(cookie, cookie_name))) {
             char *cookiebuf, *cookieend;
-            ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0,r->server, "Found Radius Cookie, now check if it's valid...");
+            RADLOG_DEBUG(r->server, "Found Radius Cookie, now check if it's valid...");
             value += strlen(cookie_name); /* skip the name */
       
             /*
@@ -916,7 +919,7 @@ radius_authenticate(request_rec *r,
     if (password_len == 0) {
         password_len = 16;        /* it's at least 15 bytes long */
     } else if (password_len > 128) { /* password too long, from RFC2138, p.22 */
-        ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0,r->server,"password given by user %s is too long for RADIUS", user);
+        RADLOG_DEBUG(r->server,"password given by user %s is too long for RADIUS", user);
         return FALSE;
     }
     
@@ -970,7 +973,7 @@ radius_authenticate(request_rec *r,
     } else {
         ip_addr = get_ip_addr(r->pool, r->connection->base_server->server_hostname);
         if (ip_addr == NULL) {
-            ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0,r->server, "cannot look up server hostname: %s",
+            RADLOG_DEBUG(r->server, "cannot look up server hostname: %s",
                     r->connection->base_server->server_hostname);
             return FALSE;
         }
@@ -1003,13 +1006,13 @@ radius_authenticate(request_rec *r,
     sin->sin_addr.s_addr = scr->radius_ip->s_addr;
     sin->sin_port = htons(scr->port);
   
-    ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server, "Sending packet on %s:%i",
+    RADLOG_DEBUG(r->server, "Sending packet on %s:%i",
             inet_ntoa(*scr->radius_ip), scr->port);
   
     while (retries >= 0) {
         if (sendto(sockfd, (char *) packet, total_length, 0,
              &saremote, sizeof(struct sockaddr_in)) < 0) {
-            ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server, "Error sending RADIUS packet for user %s: %s", user, strerror(errno));
+            RADLOG_DEBUG(r->server, "Error sending RADIUS packet for user %s: %s", user, strerror(errno));
             return FALSE;
         }
   
@@ -1038,7 +1041,7 @@ radius_authenticate(request_rec *r,
      * Error.  Die.
      */
     if (rcode < 0) {
-        ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server, "Error waiting for RADIUS response: %s", strerror(errno));
+        RADLOG_DEBUG(r->server, "Error waiting for RADIUS response: %s", strerror(errno));
         return FALSE;
     }
     
@@ -1046,14 +1049,14 @@ radius_authenticate(request_rec *r,
      *  Time out.
      */
     if (rcode == 0) {
-        ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server, "RADIUS server %s failed to respond within %d seconds after each of %d retries",
+        RADLOG_DEBUG(r->server, "RADIUS server %s failed to respond within %d seconds after each of %d retries",
           inet_ntoa(*scr->radius_ip), scr->wait, scr->retries);
         return FALSE;
     }
   
     if ((total_length = recvfrom(sockfd, (char *) recv_buffer,
                      RADIUS_PACKET_RECV_SIZE,   0, &saremote, &salen)) < 0) {
-        ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server, "Error reading RADIUS packet: %s", strerror(errno));
+        RADLOG_DEBUG(r->server, "Error reading RADIUS packet: %s", strerror(errno));
         return FALSE;
     }
   
@@ -1065,13 +1068,13 @@ radius_authenticate(request_rec *r,
     packet = (radius_packet_t *) recv_buffer; /* we have a new packet */
     if ((ntohs(packet->length) > total_length) ||
         (ntohs(packet->length) > RADIUS_PACKET_RECV_SIZE)) {
-        ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server, "RADIUS packet corrupted");
+        RADLOG_DEBUG(r->server, "RADIUS packet corrupted");
         return FALSE;
     }
     
     /* Check if we've got everything OK.  We should also check packet->id...*/
     if (verify_packet(r, packet, vector)) {
-        ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server, "RADIUS packet fails verification");
+        RADLOG_DEBUG(r->server, "RADIUS packet fails verification");
         return FALSE;
     }
     
@@ -1125,7 +1128,7 @@ check_pw(request_rec *r,
   
     /* connect to a port */
     if ((sockfd = socket (AF_INET, SOCK_DGRAM, 0)) < 0) {
-        ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0,r->server, "error opening RADIUS socket for user %s: %s", user, strerror(errno));
+        RADLOG_DEBUG(r->server, "error opening RADIUS socket for user %s: %s", user, strerror(errno));
         return FALSE;
     }
   
@@ -1142,7 +1145,7 @@ check_pw(request_rec *r,
   
     if (local_port >= 64000) {
         close(sockfd);
-        ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server, "cannot bind to RADIUS socket for user %s", user);
+        RADLOG_DEBUG(r->server, "cannot bind to RADIUS socket for user %s", user);
         return FALSE;
     }
   
@@ -1173,7 +1176,7 @@ check_pw(request_rec *r,
         }
         
         case RADIUS_ACCESS_REJECT:
-            ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0,r->server, "RADIUS authentication failed for user %s", user);
+            RADLOG_DEBUG(r->server, "RADIUS authentication failed for user %s", user);
             break;
             
         case RADIUS_ACCESS_CHALLENGE: {
@@ -1184,7 +1187,7 @@ check_pw(request_rec *r,
       
             if (((a_state = find_attribute(packet, RADIUS_STATE)) == NULL) ||
                 ((a_reply = find_attribute(packet, RADIUS_REPLY_MESSAGE)) == NULL)) {
-                ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server, "RADIUS access-challenge received with State or Reply-Message missing");
+                RADLOG_DEBUG(r->server, "RADIUS access-challenge received with State or Reply-Message missing");
                 break;
             }
       
@@ -1212,12 +1215,12 @@ check_pw(request_rec *r,
             add_cookie(r, r->err_headers_out,make_cookie(r, expires, "", server_state), expires);
             
             /* log the challenge, as it IS an error returned to the user */
-            ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server, "RADIUS server requested challenge for user %s", user);
+            RADLOG_DEBUG(r->server, "RADIUS server requested challenge for user %s", user);
             break;
         }
         
         default: /* don't know what else to do */
-            ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server, "RADIUS server returned unknown response %02x",
+            RADLOG_DEBUG(r->server, "RADIUS server returned unknown response %02x",
                 packet->code);
             break;
     }
@@ -1277,8 +1280,8 @@ authenticate_basic_user_common(request_rec *r,
   
     /* no server declared, decline but note for debugging purposes -joy */
     if (!scr->radius_ip) {
-        ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_WARNING, 0, r->server,
-                   "AuthRadiusActive set, but no RADIUS server IP - missing AddRadiusAuth in this context?");
+        RADLOG_WARN(r->server,
+            "AuthRadiusActive set, but no RADIUS server IP - missing AddRadiusAuth in this context?");
         return DECLINED;
     }
     
@@ -1287,17 +1290,17 @@ authenticate_basic_user_common(request_rec *r,
   
     message[0] = 0;        /* no message for now */
   
-    ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server, "Radius Auth for: %s requests %s : file=%s",
+    RADLOG_DEBUG(r->server, "Radius Auth for: %s requests %s : file=%s",
         r->server->server_hostname, r->uri, r->filename);
   
     /* check for the existence of a cookie: do weak authentication if so */
     if ((cookie = spot_cookie(r)) != NULL) {
-        ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server, "Found cookie=%s for user=%s : ", cookie, r->user);
+        RADLOG_DEBUG(r->server, "Found cookie=%s for user=%s : ", cookie, r->user);
   
         /* are we in a Challenge-Response intermediate state? */
         if (((state = strstr(cookie, APACHE_RADIUS_MAGIC_STATE)) != NULL) &&
             ((state - cookie) == 40)) { /* it's in the right place */
-            ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server, "with RADIUS challenge state set.");
+            RADLOG_DEBUG(r->server, "with RADIUS challenge state set.");
            /*
             * If there's an authentication failure, ensure we delete the state.
             * If authentication succeeds, the new cookie will supersede the old.
@@ -1308,17 +1311,17 @@ authenticate_basic_user_common(request_rec *r,
   
             /* valid username, passwd, and expiry date: don't do RADIUS */
         } else if (valid_cookie(r, cookie, sent_pw)) {
-            ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server, "still valid.  Serving page.");
+            RADLOG_DEBUG(r->server, "still valid.  Serving page.");
             return OK;
         } else {            /* the cookie has probably expired */
             /* don't bother logging the fact: we probably don't care */
             add_cookie(r, r->err_headers_out, cookie, 0);
             note_challenge_auth_failure(r, r->user, message);
-            ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server,"Invalid or expired. telling browser to delete cookie");
+            RADLOG_DEBUG(r->server,"Invalid or expired. telling browser to delete cookie");
             return HTTP_UNAUTHORIZED;
         }
     } else {
-        ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server,"No cookie found.  Trying RADIUS authentication.");
+        RADLOG_DEBUG(r->server,"No cookie found.  Trying RADIUS authentication.");
     }
   
 #if 0
@@ -1334,14 +1337,14 @@ authenticate_basic_user_common(request_rec *r,
   
     /* Check the password, and fill in the error string if an error happens */
     if (!(check_pw(r, scr, r->user, sent_pw, state, message, errstr))) {
-        ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server, "RADIUS authentication for user=%s password=%s failed",
+        RADLOG_DEBUG(r->server, "RADIUS authentication for user=%s password=%s failed",
                         r->user, sent_pw);
         if (!(rec->authoritative)) {
-            ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server, "We're not authoritative.  Never mind.");
+            RADLOG_DEBUG(r->server, "We're not authoritative.  Never mind.");
             return DECLINED;        /* never mind */
         }
         note_challenge_auth_failure(r, r->user, message);
-        ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server, "Sending failure message to user=%s", r->user);
+        RADLOG_DEBUG(r->server, "Sending failure message to user=%s", r->user);
         return HTTP_UNAUTHORIZED;
     }
   
@@ -1358,11 +1361,11 @@ authenticate_basic_user_common(request_rec *r,
     expires = time(NULL) + (min * 60);
     cookie = make_cookie(r, expires, sent_pw, NULL);
   
-    ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server,
+    RADLOG_DEBUG(r->server,
             "RADIUS Authentication for user=%s password=%s OK.  Cookie expiry in %d minutes",
             r->user, sent_pw, min);
   
-    ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server, "Adding cookie %s", cookie);
+    RADLOG_DEBUG(r->server, "Adding cookie %s", cookie);
   
     add_cookie(r, r->headers_out, cookie, expires);
   
@@ -1423,7 +1426,7 @@ static int x_header_parser(request_rec *r)
 
     const char *teste = apr_table_get(r->headers_in, "teste");
 
-    ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server,
+    RADLOG_DEBUG(r->server,
           "Verificando header: teste = %s", teste);
 
     return OK;
