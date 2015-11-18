@@ -377,8 +377,14 @@ static const char *cookie_name = "RADIUS";
 
 #define COOKIE_SIZE                   1024
 
+#define radcpy(STRING, ATTR) do { \
+                  uint8_t len = ATTR->length; \
+                  if (len >= 2) len-=2; \
+                  memcpy(STRING, ATTR->data, len); \
+                  (STRING)[len] = 0;} while (0)
+
 /* per-server configuration structure */
-typedef struct radius_server_config_struct {
+typedef struct radius_srv_rec_s {
     struct in_addr *radius_ip;    /* server IP address */
     char *secret;                 /* server shared secret */
     int secret_len;               /* length of the secret (to save time later) */
@@ -387,22 +393,23 @@ typedef struct radius_server_config_struct {
     int retries;                  /* number of retries on timeout */
     uint16_t port;                /* RADIUS port number */
     unsigned long bind_address;   /* bind socket to this local address */
-    struct radius_server_config_struct *next; /* fallback server(s) */
-} radius_server_config_rec;
+    struct radius_srv_rec_s *next; /* fallback server(s) */
+} radius_srv_rec_t;
 
 /* per-server configuration create */
 static void *
-create_radius_server_config(apr_pool_t *p, server_rec *s) {
-    radius_server_config_rec *scr;
+create_radius_srv_config(apr_pool_t *p,
+                         server_rec *s) {
+    radius_srv_rec_t *scr;
 
-    scr = (radius_server_config_rec *) apr_pcalloc(p, sizeof(radius_server_config_rec));
+    scr = (radius_srv_rec_t *) apr_pcalloc(p, sizeof(radius_srv_rec_t));
     scr->radius_ip = NULL;            /* no server yet */
     scr->port = RADIUS_AUTH_UDP_PORT; /* set the default port */
-    scr->secret = NULL;               /* no secret yet */
-    scr->secret_len = 0;
     scr->wait = 5;                    /* wait 5 sec before giving up on the packet */
     scr->retries = 0;                 /* no additional retries */
     scr->timeout = 60;                /* valid for one hour by default */
+    scr->secret = NULL;               /* no secret yet */
+    scr->secret_len = 0;
     scr->bind_address = INADDR_ANY;
     scr->next = NULL;
 
@@ -423,32 +430,33 @@ create_radius_server_config(apr_pool_t *p, server_rec *s) {
  * containing the merged values.
  */
 static void *
-radius_merge_server_config(apr_pool_t * p, void *server1_conf, void *server2_conf) {
-    void * result = NULL;
+merge_radius_srv_config(apr_pool_t * p,
+                        void *parent_conf,
+                        void *newloc_conf) {
+    radius_srv_rec_t *mrg_cfg = create_radius_srv_config(p, NULL);
+    radius_srv_rec_t *pcfg1 = (radius_srv_rec_t *)parent_conf;
+    radius_srv_rec_t *pcfg2 = (radius_srv_rec_t *)newloc_conf;
+    void *result = NULL;
 
-    radius_server_config_rec *pMergedConfig = create_radius_server_config(p, NULL);
-    radius_server_config_rec *pServer1Config = (radius_server_config_rec *) server1_conf;
-    radius_server_config_rec *pServer2Config = (radius_server_config_rec *) server2_conf;
-
-    result = (pServer2Config->radius_ip == NULL) ? pServer1Config->radius_ip : pServer2Config->radius_ip;
+    result = (pcfg2->radius_ip == NULL) ? pcfg1->radius_ip : pcfg2->radius_ip;
     if (result != NULL) {
-        pMergedConfig->radius_ip = apr_pcalloc(p, sizeof(struct in_addr));
-        *pMergedConfig->radius_ip = *((struct in_addr *) result); /* make a copy */
+        mrg_cfg->radius_ip = apr_pcalloc(p, sizeof(struct in_addr));
+        *mrg_cfg->radius_ip = *((struct in_addr *) result); /* make a copy */
     }
 
-    result = (pServer2Config->secret == NULL) ? pServer1Config->secret : pServer2Config->secret;
+    result = (pcfg2->secret == NULL) ? pcfg1->secret : pcfg2->secret;
     if (result != NULL) {
-        pMergedConfig->secret = apr_pstrdup(p, (char*)result); /* make a copy */
-        pMergedConfig->secret_len = strlen( pMergedConfig->secret );
+        mrg_cfg->secret = apr_pstrdup(p, (char *)result); /* make a copy */
+        mrg_cfg->secret_len = strlen(mrg_cfg->secret);
     }
 
-    pMergedConfig->port = pServer2Config->port;
-    pMergedConfig->wait = pServer2Config->wait;
-    pMergedConfig->retries = pServer2Config->retries;
-    pMergedConfig->timeout = pServer2Config->timeout;
-    pMergedConfig->bind_address = pServer2Config->bind_address;
+    mrg_cfg->port = pcfg2->port;
+    mrg_cfg->wait = pcfg2->wait;
+    mrg_cfg->retries = pcfg2->retries;
+    mrg_cfg->timeout = pcfg2->timeout;
+    mrg_cfg->bind_address = pcfg2->bind_address;
 
-    return (void *)pMergedConfig;
+    return (void *)mrg_cfg;
 }
 
 /* RADIUS utility functions */
@@ -489,20 +497,21 @@ get_random_vector(uint8_t vector[RADIUS_RANDOM_VECTOR_LEN]) {
 }
 
 /* Per-dir configuration structure */
-typedef struct radius_dir_config_struct {
-    radius_server_config_rec* server;
+typedef struct radius_dir_cfg_rec_s {
+    radius_srv_rec_t *server;
     int active;               /* Are we doing RADIUS in this dir? */
     int authoritative;        /* is RADIUS authentication authoritative? */
     int timeout;              /* cookie time valid */
     char *calling_station_id; /* custom value for specifying hardcoded calling station ID */
-} radius_dir_config_rec;
+} radius_dir_cfg_rec_t;
 
 /* Per-dir configuration create */
 static void *
-create_radius_dir_config (apr_pool_t *p, char *d) {
-    radius_dir_config_rec *rec;
+create_radius_dir_cfg_rec (apr_pool_t *p,
+                           char *d) {
+    radius_dir_cfg_rec_t *rec;
 
-    rec = (radius_dir_config_rec *) apr_pcalloc (p, sizeof(radius_dir_config_rec));
+    rec = (radius_dir_cfg_rec_t *)apr_pcalloc (p, sizeof(radius_dir_cfg_rec_t));
 
     rec->server = NULL;             /* no valid server by default */
     rec->active = 1;                /* active by default */
@@ -529,36 +538,34 @@ create_radius_dir_config (apr_pool_t *p, char *d) {
  * containing the merged values.
  */
 static void *
-radius_merge_dir_config(apr_pool_t *p,
-                        void *parent_conf,
-                        void *newloc_conf) {
+merge_radius_dir_cfg_rec(apr_pool_t *p,
+                         void *parent_conf,
+                         void *newloc_conf) {
+    radius_dir_cfg_rec_t *mrg_cfg = create_radius_dir_cfg_rec(p, NULL);
+    radius_dir_cfg_rec_t *pcfg1 = (radius_dir_cfg_rec_t *)parent_conf;
+    radius_dir_cfg_rec_t *pcfg2 = (radius_dir_cfg_rec_t *)newloc_conf;
     void *result = NULL;
 
-    radius_dir_config_rec *pMergedConfig = create_radius_dir_config(p, NULL);
-    radius_dir_config_rec *pServer1Config = (radius_dir_config_rec *) parent_conf;
-    radius_dir_config_rec *pServer2Config = (radius_dir_config_rec *) newloc_conf;
-
-    result = (pServer2Config->calling_station_id == NULL) ?
-            pServer1Config->calling_station_id : pServer2Config->calling_station_id;
+    result = (pcfg2->calling_station_id == NULL) ? pcfg1->calling_station_id : pcfg2->calling_station_id;
     if (result != NULL) {
-        pMergedConfig->calling_station_id = apr_pstrdup(p, (char*)result); /* make a copy */
+        mrg_cfg->calling_station_id = apr_pstrdup(p, (char *)result); /* make a copy */
     }
 
-    pMergedConfig->active = pServer2Config->active;
-    pMergedConfig->authoritative = pServer2Config->authoritative;
-    pMergedConfig->timeout = pServer2Config->timeout;
+    mrg_cfg->active = pcfg2->active;
+    mrg_cfg->authoritative = pcfg2->authoritative;
+    mrg_cfg->timeout = pcfg2->timeout;
 
-    return (void *)pMergedConfig;
+    return (void *)mrg_cfg;
 }
 
-/* per-server set configuration */
+/* AddRadiusAuth: per-server set configuration */
 static const char *
 add_auth_radius(cmd_parms *cmd,
                 void *mconfig,
                 const char *server,
                 const char *secret,
                 const char *wait) {
-    radius_server_config_rec *scr;
+    radius_srv_rec_t *scr;
     uint16_t port;
     char *p;
 
@@ -584,39 +591,46 @@ add_auth_radius(cmd_parms *cmd,
     scr->secret = apr_pstrdup(cmd->pool, secret);
     scr->secret_len = strlen(scr->secret);
     if (wait != NULL) {
-        if ((p = strchr(wait,':')) != NULL) {
-            *(p++) = 0;   /* null terminate the wait part of the string */
+        if ((p = strchr(wait, ':')) != NULL) {
+            *(p++) = '\0';   /* null terminate the wait part of the string */
             scr->retries = atoi(p);
         } 
         scr->wait = atoi(wait);
-    } /* else it's already initialized */
+    }
+
+    /* else it's already initialized */
     scr->bind_address = INADDR_ANY;
 
     return NULL;
 }
 
 /*
- * Set the local address to which this client is bound.
+ * AuthRadiusBindAddress: Set the local address to which this client is bound.
  */
 static const char *
-set_bind_address (cmd_parms *cmd, void *mconfig, const char *arg) {
-    radius_server_config_rec *scr;
+set_bind_address(cmd_parms *cmd,
+                 void *mconfig,
+                 const char *arg) {
+    radius_srv_rec_t *scr;
     struct in_addr *a;
 
     scr = ap_get_module_config(cmd->server->module_config, &radius_auth_module);
     if ((a = get_ip_addr(cmd->pool, arg)) == NULL) return "AuthRadiusBindAddress: Invalid IP address";
     scr->bind_address = a->s_addr;
+
     return NULL;
 }
 
 /*
- *  Set the cookie valid time.
+ * AddRadiusCookieValid: Set the cookie valid time.
  */
 static const char *
 set_cookie_valid(cmd_parms *cmd, void *mconfig, const char *arg) {
-    radius_server_config_rec *scr;
+    radius_srv_rec_t *scr;
+
     scr = ap_get_module_config(cmd->server->module_config, &radius_auth_module);
     scr->timeout = atoi(arg);
+
     return NULL;
 }
 
@@ -635,19 +649,19 @@ static command_rec auth_cmds[] = {
       "per-server time in minutes for which the returned cookie is valid. After this time, authentication will be requested again. Use '0' for forever."), 
   
     AP_INIT_TAKE1("AddRadiusCallingStationID", ap_set_string_slot,
-      (void*)APR_OFFSETOF(radius_dir_config_rec, calling_station_id), OR_AUTHCFG,
+      (void*)APR_OFFSETOF(radius_dir_cfg_rec_t, calling_station_id), OR_AUTHCFG,
       "per-directory custom value for the calling station ID attribute. If unset, default is to use the client's remote IP address."),
   
     AP_INIT_FLAG("AuthRadiusAuthoritative", ap_set_flag_slot,
-      (void*)APR_OFFSETOF(radius_dir_config_rec, authoritative), OR_AUTHCFG,
+      (void*)APR_OFFSETOF(radius_dir_cfg_rec_t, authoritative), OR_AUTHCFG,
       "per-directory access on failed authentication. If set to 'no', then access control is passed along to lower modules on failed authentication."),
   
     AP_INIT_TAKE1("AuthRadiusCookieValid", ap_set_int_slot,
-      (void*)APR_OFFSETOF(radius_dir_config_rec, timeout), OR_AUTHCFG,
+      (void*)APR_OFFSETOF(radius_dir_cfg_rec_t, timeout), OR_AUTHCFG,
       "per-directory time in minutes for which the returned cookie is valid. After this time, authentication will be requested again .Use 0 for forever."),
   
     AP_INIT_FLAG("AuthRadiusActive", ap_set_flag_slot,
-      (void*)APR_OFFSETOF(radius_dir_config_rec, active), OR_AUTHCFG,
+      (void*)APR_OFFSETOF(radius_dir_cfg_rec_t, active), OR_AUTHCFG,
       "per-directory toggle the use of RADIUS authentication."),
   
     { NULL }
@@ -670,11 +684,11 @@ verify_packet(request_rec *r,
               uint8_t vector[RADIUS_RANDOM_VECTOR_LEN]) {
     apr_md5_ctx_t my_md5;
     server_rec *s = r->server; 
-    radius_server_config_rec *scr;
+    radius_srv_rec_t *scr;
     uint8_t calculated[RADIUS_RANDOM_VECTOR_LEN];
     uint8_t reply[RADIUS_RANDOM_VECTOR_LEN];
   
-    scr = (radius_server_config_rec *) ap_get_module_config (s->module_config, &radius_auth_module);
+    scr = (radius_srv_rec_t *) ap_get_module_config (s->module_config, &radius_auth_module);
     
     /*
      * We could dispense with the memcpy, and do MD5's of the packet
@@ -722,11 +736,11 @@ make_cookie(request_rec *r,
     char *cookie;
     conn_rec *c = r->connection;
     server_rec *s = r->server;
-    radius_server_config_rec *scr;
+    radius_srv_rec_t *scr;
     const char *hostname;
   
     cookie = apr_pcalloc(r->pool, COOKIE_SIZE);
-    scr = (radius_server_config_rec *)ap_get_module_config (s->module_config, &radius_auth_module);
+    scr = (radius_srv_rec_t *)ap_get_module_config (s->module_config, &radius_auth_module);
     
     if ((hostname = ap_get_remote_host(c, r->per_dir_config, REMOTE_NAME, NULL)) == NULL)
       hostname = "no.one@example.com";
@@ -854,7 +868,8 @@ spot_cookie(request_rec *r) {
     if ((cookie = apr_table_get(r->headers_in, "Cookie"))) {
         if ((value = strstr(cookie, cookie_name))) {
             char *cookiebuf, *cookieend;
-            ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0,r->server, "Found Radius Cookie, now check if it's valid...");
+
+            ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server, "Found Radius Cookie, now check if it's valid...");
             value += strlen(cookie_name); /* skip the name */
       
             /*
@@ -881,7 +896,7 @@ spot_cookie(request_rec *r) {
 /* There's a lot of parameters to this function, but it does a lot of work */
 static int
 radius_authenticate(request_rec *r,
-                    radius_server_config_rec *scr, 
+                    radius_srv_rec_t *scr, 
                     int sockfd,
                     int code,
                     char *recv_buffer,
@@ -908,9 +923,9 @@ radius_authenticate(request_rec *r,
   
     uint8_t send_buffer[RADIUS_PACKET_SEND_SIZE];
     radius_packet_t *packet = (radius_packet_t *) send_buffer;
-    radius_dir_config_rec *rec;
+    radius_dir_cfg_rec_t *rec;
   
-    rec = (radius_dir_config_rec *)ap_get_module_config (r->per_dir_config, &radius_auth_module);
+    rec = (radius_dir_cfg_rec_t *)ap_get_module_config (r->per_dir_config, &radius_auth_module);
     i = strlen(passwd_in);
     password_len = (i + 0x0f) & 0xfffffff0; /* round off to 16 */
     if (password_len == 0) {
@@ -953,6 +968,7 @@ radius_authenticate(request_rec *r,
         apr_md5_final(misc, &my_md5);      /* set the final vector */
         xor(&password[i * RADIUS_PASSWORD_LEN], misc, RADIUS_PASSWORD_LEN);
     }
+
     add_attribute(packet, RADIUS_PASSWORD, password, password_len);
   
     /* Tell the RADIUS server that we only want to authenticate */
@@ -1088,26 +1104,18 @@ find_attribute(radius_packet_t *packet, uint8_t type) {
   
     while (attr->attribute != type) {
         if (attr->length < 2) return NULL;
-  
-        if ((len -= attr->length) <= 0) {
-            return NULL;        /* not found */
-        }
+        if ((len -= attr->length) <= 0) return NULL;        /* not found */
+
         attr = (attribute_t *) ((char *) attr + attr->length);
     }
 
     return attr;
 }
 
-#define radcpy(STRING, ATTR) do { \
-                  uint8_t len = ATTR->length; \
-                  if (len >= 2) len-=2; \
-                  memcpy(STRING, ATTR->data, len); \
-                  (STRING)[len] = 0;} while (0)
-
 /* authentication module utility functions */
 static int
 check_pw(request_rec *r,
-         radius_server_config_rec *scr,
+         radius_srv_rec_t *scr,
          const char *user,
          const char *passwd_in,
          const char *state,
@@ -1233,7 +1241,7 @@ note_challenge_auth_failure(request_rec *r,
         /* note_basic_auth_failure(r); */
     } else {            /* print our magic message */
         apr_table_set (r->err_headers_out, "WWW-Authenticate",
-         apr_pstrcat(r->pool, "Basic realm=\"", ap_auth_name(r), " for ", user, " '", message, "'", NULL));
+        apr_pstrcat(r->pool, "Basic realm=\"", ap_auth_name(r), " for ", user, " '", message, "'", NULL));
     }
 }
 
@@ -1256,9 +1264,9 @@ int
 authenticate_basic_user_common(request_rec *r,
                                const char* user,
                                const char* sent_pw) {
-    radius_dir_config_rec *rec;
+    radius_dir_cfg_rec_t *rec;
     server_rec *s = r->server; 
-    radius_server_config_rec *scr;
+    radius_srv_rec_t *scr;
     //conn_rec *c = r->connection;
     char errstr[MAX_STRING_LEN];
     int min;
@@ -1268,12 +1276,11 @@ authenticate_basic_user_common(request_rec *r,
     time_t expires;
     //struct stat buf;
     
-    rec = (radius_dir_config_rec *)ap_get_module_config(r->per_dir_config, &radius_auth_module);
-    scr = (radius_server_config_rec *)ap_get_module_config(s->module_config, &radius_auth_module);
+    rec = (radius_dir_cfg_rec_t *)ap_get_module_config(r->per_dir_config, &radius_auth_module);
+    scr = (radius_srv_rec_t *)ap_get_module_config(s->module_config, &radius_auth_module);
   
     /* not active here, just decline */
-    if (!rec->active)
-        return DECLINED;
+    if (!rec->active) return DECLINED;
   
     /* no server declared, decline but note for debugging purposes -joy */
     if (!scr->radius_ip) {
@@ -1282,8 +1289,7 @@ authenticate_basic_user_common(request_rec *r,
         return DECLINED;
     }
     
-    if (r->user[0] == 0)        /* NUL users can never be let in */
-        return HTTP_UNAUTHORIZED;
+    if (r->user[0] == 0) return HTTP_UNAUTHORIZED; /* NUL users can never be let in */
   
     message[0] = 0;        /* no message for now */
   
@@ -1378,12 +1384,9 @@ authenticate_basic_user_newargs(request_rec *r,
   
     normalreturnvalue = authenticate_basic_user_common(r, user, password);
   
-    if (normalreturnvalue == OK)
-        return AUTH_GRANTED;
-    else if (normalreturnvalue == HTTP_UNAUTHORIZED)
-        return AUTH_DENIED;
-    else
-        return AUTH_GENERAL_ERROR;
+    if (normalreturnvalue == OK) return AUTH_GRANTED;
+    else if (normalreturnvalue == HTTP_UNAUTHORIZED) return AUTH_DENIED;
+    else return AUTH_GENERAL_ERROR;
     /* AUTH_USER_NOT_FOUND would be nice, but the typical RADIUS server
        never gives any such information, it just sends an Access-Reject
        packet, no reasons given
@@ -1402,8 +1405,7 @@ authenticate_basic_user(request_rec *r) {
        explicitly check if it's not OK, whatever that may be -joy
      */
     res = ap_get_basic_auth_pw(r, &sent_pw);
-    if (res != OK)
-        return res;
+    if (res != OK) return res;
   
     return authenticate_basic_user_common(r, r->user, sent_pw);
 }
@@ -1414,30 +1416,13 @@ static const authn_provider authn_radius_provider = {
     NULL
 };
 
-static int x_header_parser(request_rec *r)
-{
-    /*
-     * We don't actually *do* anything here, except note the fact that we were
-     * called.
-     */
-
-    const char *teste = apr_table_get(r->headers_in, "teste");
-
-    ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, r->server,
-          "Verificando header: teste = %s", teste);
-
-    return OK;
-}
-
 static void register_hooks(apr_pool_t *p) {
     /* Apache 2.1+ */
     static const char *const aszPost[] = { "mod_authz_user.c", NULL };
   
     ap_register_provider(p, AUTHN_PROVIDER_GROUP, "radius", "0", &authn_radius_provider);
     //ap_hook_check_user_id(authenticate_basic_user,NULL,aszPost,APR_HOOK_MIDDLE);
-  
-    ap_hook_header_parser(x_header_parser, NULL, NULL, APR_HOOK_MIDDLE);
-  
+ 
     /* Apache 2.4+ */
     ap_hook_check_access(authenticate_basic_user,
                          NULL,
@@ -1449,11 +1434,10 @@ static void register_hooks(apr_pool_t *p) {
 module AP_MODULE_DECLARE_DATA radius_auth_module =
 {
     STANDARD20_MODULE_STUFF,
-    create_radius_dir_config,    /* dir config creater */
-    radius_merge_dir_config,     /* dir merger --- default is to override */
-    create_radius_server_config, /* server config */
-    radius_merge_server_config,  /* merge server config */
+    create_radius_dir_cfg_rec,   /* dir config creater */
+    merge_radius_dir_cfg_rec,    /* dir merger --- default is to override */
+    create_radius_srv_config,    /* server config */
+    merge_radius_srv_config,     /* merge server config */
     auth_cmds,                   /* command apr_table_t */
     register_hooks               /* register hooks */
 };
-
