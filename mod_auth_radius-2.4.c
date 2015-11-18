@@ -313,6 +313,11 @@
 
 module AP_MODULE_DECLARE_DATA radius_auth_module;
 
+#if ! defined( false )
+# define false  0
+# define true   (!false)
+#endif
+
 #define RADLOG_DEBUG(srv,fmt,...) ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, srv, fmt,  ## __VA_ARGS__)
 #define RADLOG_WARN(srv,fmt,...) ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_WARNING, 0, srv, fmt,  ## __VA_ARGS__)
 
@@ -372,14 +377,6 @@ typedef struct radius_packet_t {
 #define RADIUS_PACKET_RECV_SIZE       1024
 #define RADIUS_PACKET_SEND_SIZE       1024
 #define APACHE_RADIUS_MAGIC_STATE     "f36809ad"
-
-#ifndef FALSE
-#define FALSE 0
-#endif
-
-#ifndef TRUE
-#define TRUE !FALSE
-#endif
 
 /* Add a cookie to an outgoing request */
 static const char *cookie_name = "RADIUS";
@@ -820,17 +817,17 @@ valid_cookie(request_rec *r,
              const char *passwd) {
     time_t expires, now;
   
-    if (strlen(cookie) < (16 + 4)*2) return FALSE; /* MD5 is 16 bytes, and expiry date is 4*/
+    if (strlen(cookie) < (16 + 4)*2) return false; /* MD5 is 16 bytes, and expiry date is 4*/
 
     sscanf(&cookie[32], "%8lx", &expires);
   
     now = time(NULL);
-    if (expires < now) return FALSE; /* valid only for a short window of time */
+    if (expires < now) return false; /* valid only for a short window of time */
   
     /* Is the returned cookie identical to one made from our secret? */
-    if (strcmp(cookie, make_cookie(r, expires, passwd, NULL)) == 0) return TRUE;
+    if (strcmp(cookie, make_cookie(r, expires, passwd, NULL)) == 0) return true;
     
-    return FALSE; /* cookie doesn't match: re-validate */
+    return false; /* cookie doesn't match: re-validate */
 }
 
 static void
@@ -929,7 +926,7 @@ radius_authenticate(request_rec *r,
         password_len = 16;        /* it's at least 15 bytes long */
     } else if (password_len > 128) { /* password too long, from RFC2138, p.22 */
         RADLOG_DEBUG(r->server,"password given by user %s is too long for RADIUS", user);
-        return FALSE;
+        return false;
     }
     
     memset(password, 0, password_len);
@@ -984,7 +981,7 @@ radius_authenticate(request_rec *r,
         if (ip_addr == NULL) {
             RADLOG_DEBUG(r->server, "cannot look up server hostname: %s",
                     r->connection->base_server->server_hostname);
-            return FALSE;
+            return false;
         }
     }
   
@@ -1022,7 +1019,7 @@ radius_authenticate(request_rec *r,
         if (sendto(sockfd, (char *) packet, total_length, 0,
              &saremote, sizeof(struct sockaddr_in)) < 0) {
             RADLOG_DEBUG(r->server, "Error sending RADIUS packet for user %s: %s", user, strerror(errno));
-            return FALSE;
+            return false;
         }
   
         wait_again:
@@ -1051,7 +1048,7 @@ radius_authenticate(request_rec *r,
      */
     if (rcode < 0) {
         RADLOG_DEBUG(r->server, "Error waiting for RADIUS response: %s", strerror(errno));
-        return FALSE;
+        return false;
     }
     
     /*
@@ -1060,34 +1057,34 @@ radius_authenticate(request_rec *r,
     if (rcode == 0) {
         RADLOG_DEBUG(r->server, "RADIUS server %s failed to respond within %d seconds after each of %d retries",
           inet_ntoa(*scr->radius_ip), scr->wait, scr->retries);
-        return FALSE;
+        return false;
     }
   
     if ((total_length = recvfrom(sockfd, (char *) recv_buffer,
                      RADIUS_PACKET_RECV_SIZE,   0, &saremote, &salen)) < 0) {
         RADLOG_DEBUG(r->server, "Error reading RADIUS packet: %s", strerror(errno));
-        return FALSE;
+        return false;
     }
   
     if (total_length < RADIUS_HEADER_LEN) {
         apr_snprintf(errstr, MAX_STRING_LEN, "Packet is too small");
-        return FALSE;
+        return false;
     }
   
     packet = (radius_packet_t *) recv_buffer; /* we have a new packet */
     if ((ntohs(packet->length) > total_length) ||
         (ntohs(packet->length) > RADIUS_PACKET_RECV_SIZE)) {
         RADLOG_DEBUG(r->server, "RADIUS packet corrupted");
-        return FALSE;
+        return false;
     }
     
     /* Check if we've got everything OK.  We should also check packet->id...*/
     if (verify_packet(r, packet, vector)) {
         RADLOG_DEBUG(r->server, "RADIUS packet fails verification");
-        return FALSE;
+        return false;
     }
     
-    return TRUE;
+    return true;
 }
 
 /* Find a particular attribute.  All we really care about is STATE */
@@ -1131,7 +1128,7 @@ check_pw(request_rec *r,
     /* connect to a port */
     if ((sockfd = socket (AF_INET, SOCK_DGRAM, 0)) < 0) {
         RADLOG_DEBUG(r->server, "error opening RADIUS socket for user %s: %s", user, strerror(errno));
-        return FALSE;
+        return false;
     }
   
     sin = (struct sockaddr_in *) &salocal;
@@ -1148,7 +1145,7 @@ check_pw(request_rec *r,
     if (local_port >= 64000) {
         close(sockfd);
         RADLOG_DEBUG(r->server, "cannot bind to RADIUS socket for user %s", user);
-        return FALSE;
+        return false;
     }
   
     rcode = radius_authenticate(r, scr, sockfd,
@@ -1156,7 +1153,7 @@ check_pw(request_rec *r,
   
     close(sockfd); /* we're done with it */
   
-    if (rcode == FALSE) return FALSE;        /* error out */
+    if (rcode == false) return false;        /* error out */
     
     packet = (radius_packet_t *) recv_buffer;
   
@@ -1172,7 +1169,7 @@ check_pw(request_rec *r,
             }
       
             *message = 0;  /* no message */
-            return TRUE;   /* he likes you! */
+            return true;   /* he likes you! */
         }
         
         case RADIUS_ACCESS_REJECT:
@@ -1224,7 +1221,7 @@ check_pw(request_rec *r,
             break;
     }
     
-    return FALSE; /* default to failing authentication */
+    return false; /* default to failing authentication */
 }
 
 void
