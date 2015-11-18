@@ -518,6 +518,7 @@ typedef struct radius_dir_config_rec {
 	int timeout;
 	/* cookie time valid */
 	char *calling_station_id; /* custom value for specifying hardcoded calling station ID */
+	int debug_mode;   /* Dump all data talked with Radius */
 } radius_dir_config_rec_t;
 
 /* Per-dir configuration create */
@@ -532,6 +533,7 @@ static void *radius_per_directory_config_alloc(apr_pool_t *p, char *d)
 	rec->authoritative = 1;         /* authoritative by default */
 	rec->timeout = 0;               /* let the server config decide timeouts */
 	rec->calling_station_id = NULL; /* no custom value for calling station ID yet ; use default behavior */
+	rec->debug_mode = FALSE;
 
 	return rec;
 }
@@ -569,6 +571,7 @@ static void *radius_per_directory_config_merge(apr_pool_t *p,
 	merged_config->active = new_config->active;
 	merged_config->authoritative = new_config->authoritative;
 	merged_config->timeout = new_config->timeout;
+	merged_config->debug_mode = new_config->debug_mode;
 
 	return (void *)merged_config;
 }
@@ -680,6 +683,10 @@ static command_rec auth_cmds[] = {
 		     (void *)APR_OFFSETOF(radius_dir_config_rec_t, active), OR_AUTHCFG,
 		     "per-directory toggle the use of RADIUS authentication."),
 
+	AP_INIT_FLAG("AuthRadiusDebug", ap_set_flag_slot,
+		      (void *)APR_OFFSETOF(radius_dir_config_rec_t, debug_mode), OR_AUTHCFG,
+		      "Set to 'on' to enable the debug mode, all data talked will be displayed - defaults to off."),
+
 	{ NULL }
 };
 
@@ -750,10 +757,12 @@ static char *cookie_alloc(request_rec *r,
 	conn_rec *c = r->connection;
 	server_rec *s = r->server;
 	radius_server_config_rec_t *scr;
+	radius_dir_config_rec_t *rec;
 	const char *hostname;
 
 	cookie = apr_pcalloc(r->pool, COOKIE_SIZE);
 	scr = (radius_server_config_rec_t *)ap_get_module_config(s->module_config, &radius_auth_module);
+	rec = (radius_dir_config_rec_t *)ap_get_module_config(r->per_dir_config, &radius_auth_module);
 
 	if ((hostname = ap_get_remote_host(c, r->per_dir_config, REMOTE_NAME, NULL)) == NULL)
 		hostname = "www.example.com";
@@ -801,16 +810,15 @@ static char *cookie_alloc(request_rec *r,
 	apr_snprintf(one, COOKIE_SIZE, "%s%s%s%s%s%08x", scr->secret,
 		     r->user, passwd, client_ip_get(r), hostname, (unsigned)expires);
 
-/* if you're REALLY worried about what's going on */
-
-#if 0
-	RADLOG_DEBUG(r->server," secret     = %s", scr->secret);
-	RADLOG_DEBUG(r->server," user       = %s", r->user);
-	RADLOG_DEBUG(r->server," passwd     = %s", passwd);
-	RADLOG_DEBUG(r->server," remote ip  = %s", client_ip_get(r));
-	RADLOG_DEBUG(r->server," hostname   = %s", hostname);
-	RADLOG_DEBUG(r->server," expiry     = %08x", expires);
-#endif
+	if (rec->debug_mode) { /* if you're REALLY worried about what's going on */
+		RADLOG_DEBUG(r->server, "AuthRadiusDebug: Warning! Don't enable this in production!");
+		RADLOG_DEBUG(r->server, " secret     = %s", scr->secret);
+		RADLOG_DEBUG(r->server, " user       = %s", r->user);
+		RADLOG_DEBUG(r->server, " passwd     = %s", passwd);
+		RADLOG_DEBUG(r->server, " remote ip  = %s", r->useragent_ip);
+		RADLOG_DEBUG(r->server, " hostname   = %s", hostname);
+		RADLOG_DEBUG(r->server, " expiry     = %08x", (unsigned)expires);
+	}
 
 	/* MD5 the cookie to make it secure, and add more secret information */
 	apr_snprintf(two, COOKIE_SIZE, "%s%s", scr->secret, ap_md5(r->pool, (uint8_t *)one));
