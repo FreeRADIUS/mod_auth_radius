@@ -803,7 +803,7 @@ static char *cookie_alloc(request_rec *r,
 	 * benefit here.
 	 */
 	apr_snprintf(one, COOKIE_SIZE, "%s%s%s%s%s%08x", scr->secret,
-		     r->user, passwd, c->client_ip, hostname, (unsigned)expires);
+		     r->user, passwd, r->useragent_ip, hostname, (unsigned)expires);
 
 /* if you're REALLY worried about what's going on */
 
@@ -811,7 +811,7 @@ static char *cookie_alloc(request_rec *r,
 	RADLOG_DEBUG(r->server," secret     = %s", scr->secret);
 	RADLOG_DEBUG(r->server," user       = %s", r->user);
 	RADLOG_DEBUG(r->server," passwd     = %s", passwd);
-	RADLOG_DEBUG(r->server," remote ip  = %s", c->client_ip);
+	RADLOG_DEBUG(r->server," remote ip  = %s", r->useragent_ip);
 	RADLOG_DEBUG(r->server," hostname   = %s", hostname);
 	RADLOG_DEBUG(r->server," expiry     = %08x", expires);
 #endif
@@ -1008,8 +1008,8 @@ static int radius_authenticate(request_rec *r,
 
 	/* add calling station ID (if custom value not specified, add client IP address) */
 	if (rec->calling_station_id == NULL) {
-		attribute_add(packet, RADIUS_CALLING_STATION_ID, (uint8_t *)r->connection->client_ip,
-			      strlen(r->connection->client_ip));
+		attribute_add(packet, RADIUS_CALLING_STATION_ID, (uint8_t *)r->useragent_ip,
+			      strlen(r->useragent_ip));
 	} else {
 		attribute_add(packet, RADIUS_CALLING_STATION_ID, (uint8_t *)rec->calling_station_id,
 			      strlen((char *)rec->calling_station_id));
