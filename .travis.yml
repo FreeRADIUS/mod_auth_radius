@@ -5,7 +5,7 @@ compiler:
 before_install:
   - $CC --version
   - sudo apt-get update
-  - sudo apt-get install -qq apache2-threaded-dev
-  - sudo dpkg-query -L apache2-threaded-dev
+  - sudo apt-get -q --force-yes -fy install apache2-dev
+  - sudo dpkg-query -L apache2-dev
 script:
   - apxs2 -i -a -c mod_auth_radius.c
