@@ -16,22 +16,6 @@ AuthType Basic
 #
 AuthName "RADIUS authentication for localhost"
 
-# Apache 1.x specific settings:
-#
-# don't use 'mod_auth'.
-# You might want to disable other authentication types here.
-# You can get a similar effect by commenting out the
-# 'AddModule mod_auth_*' lines, previously in httpd.conf
-#
-#AuthAuthoritative off
-#
-#
-# Use mod_auth_radius for all authentication, and make the responses
-# from it authoritative.
-#
-#AuthRadiusAuthoritative on
-
-# Apache 2.x specific setting:
 #
 # Set RADIUS to be the provider for this basic authentication
 #
