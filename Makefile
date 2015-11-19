@@ -20,7 +20,10 @@ MOD_RADIUS_VERSION = $(MOD_RADIUS_MAJOR_VERSION).$(MOD_RADIUS_MINOR_VERSION).$(M
 #  The default rule: tell the user what to REALLY do to use
 #  the module.
 #
+
+ifeq ($(which apxs), '')
 all:
+	@echo Can't find apxs, assuming this module will be built with apache
 	@echo
 	@echo Configure this module into Apache by going to the Apache root directory,
 	@echo and typing:
@@ -33,17 +36,27 @@ all:
 	@echo "     make install"
 	@echo
 	@echo "Alternatively, if you've already built and installed Apache with"
-	@echo dynamic modules, you should be able to install this module via:
+	@echo dynamic modules, you should be able to install this module by adding apxs
+	@echo to your path and executing make again 
 	@echo
-	@echo "     sudo make apxs2"
+	@echo "     sudo make"
+	@echo "     sudo make install"
 	@echo	
 	@echo You should add your additional site configuration options to the 'configure'
 	@echo line, above.  Please read the README file for further information.
 	@echo
+install:
+	@$(MAKE)
+else
+all: mod_auth_radius.o
 
-apxs2:
-	@which apxs2 1> /dev/null 2>&1 || { echo "The program 'axps2' is currently not installed"; exit 1; }
-	apxs2 -Wall -i -a -DMOD_RADIUS_AUTH_VERSION_STRING='\"$(MOD_RADIUS_VERSION)\"' -c mod_auth_radius.c
+.PHONY: install
+install:
+	@apxs -i -a mod_auth_radius.la
+endif
+
+mod_auth_radius.o: mod_auth_radius.c
+	apxs -Wall -a -DMOD_RADIUS_AUTH_VERSION_STRING='\"$(MOD_RADIUS_VERSION)\"' -c $<
 
 ######################################################################
 #
@@ -58,5 +71,5 @@ dist:
 #  Clean up everything.
 #
 clean:
-	@rm -f *~ *.o mod_auth_radius-${MOD_RADIUS_VERSION}.tar
+	@rm -f *~ *.o *.la *.so mod_auth_radius-${MOD_RADIUS_VERSION}.tar
 	@rm -rf .libs/
