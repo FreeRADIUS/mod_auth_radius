@@ -15,6 +15,15 @@ MOD_RADIUS_MINOR_VERSION = $(shell cat VERSION | cut -f2 -d.)
 MOD_RADIUS_INCRM_VERSION = $(shell cat VERSION | cut -f3 -d.)
 MOD_RADIUS_VERSION = $(MOD_RADIUS_MAJOR_VERSION).$(MOD_RADIUS_MINOR_VERSION).$(MOD_RADIUS_INCRM_VERSION)
 
+GIT_BRANCH = $(shell git rev-parse --abbrev-ref HEAD)
+GIT_COMMIT = $(shell git log --pretty=format:'%h' -n 1)
+
+ifneq ($(GIT_COMMIT), '')
+MOD_RADIUS_VERSION_STRING = $(MOD_RADIUS_VERSION)-git-$(GIT_COMMIT)
+else
+MOD_RADIUS_VERSION_STRING = $(MOD_RADIUS_VERSION)
+endif
+
 ######################################################################
 #
 #  The default rule: tell the user what to REALLY do to use
@@ -23,7 +32,7 @@ MOD_RADIUS_VERSION = $(MOD_RADIUS_MAJOR_VERSION).$(MOD_RADIUS_MINOR_VERSION).$(M
 
 ifeq ($(which apxs), '')
 all:
-	@echo Can't find apxs, assuming this module will be built with apache
+	@echo Can\'t find apxs, assuming this module will be built with apache
 	@echo
 	@echo Configure this module into Apache by going to the Apache root directory,
 	@echo and typing:
@@ -45,9 +54,11 @@ all:
 	@echo You should add your additional site configuration options to the 'configure'
 	@echo line, above.  Please read the README file for further information.
 	@echo
+
 install:
 	@$(MAKE)
 else
+
 all: mod_auth_radius.o
 
 .PHONY: install
@@ -56,7 +67,7 @@ install:
 endif
 
 mod_auth_radius.o: mod_auth_radius.c
-	@apxs -Wall -DMOD_RADIUS_AUTH_VERSION_STRING='\"$(MOD_RADIUS_VERSION)\"' -c $<
+	@apxs -Wall -DMOD_RADIUS_AUTH_VERSION_STRING='\"$(MOD_RADIUS_VERSION_STRING)\"' -c $<
 
 ######################################################################
 #
