@@ -9,4 +9,4 @@ before_install:
   - sudo dpkg-query -L apache2-threaded-dev
   - sudo dpkg -s apache2-threaded-dev | grep 'Version'
 script:
-  - sudo apxs2 -Werror -Wall -i -a -c mod_auth_radius.c
+  - sudo make apxs2
