@@ -6,7 +6,14 @@
 #
 ######################################################################
 
-VERSION=1.6.0
+######################################################################
+#
+#   Version
+#
+MOD_RADIUS_MAJOR_VERSION = $(shell cat VERSION | cut -f1 -d.)
+MOD_RADIUS_MINOR_VERSION = $(shell cat VERSION | cut -f2 -d.)
+MOD_RADIUS_INCRM_VERSION = $(shell cat VERSION | cut -f3 -d.)
+MOD_RADIUS_VERSION = $(MOD_RADIUS_MAJOR_VERSION).$(MOD_RADIUS_MINOR_VERSION).$(MOD_RADIUS_INCRM_VERSION)
 
 ######################################################################
 #
@@ -28,24 +35,28 @@ all:
 	@echo "Alternatively, if you've already built and installed Apache with"
 	@echo dynamic modules, you should be able to install this module via:
 	@echo
-	@echo "     apxs -i -a -c mod_auth_radius.c"
+	@echo "     sudo make apxs2"
 	@echo	
 	@echo You should add your additional site configuration options to the 'configure'
 	@echo line, above.  Please read the README file for further information.
 	@echo
+
+apxs2:
+	@which apxs2 1> /dev/null 2>&1 || { echo "The program 'axps2' is currently not installed"; exit 1; }
+	apxs2 -Wall -i -a -DMOD_RADIUS_AUTH_VERSION_STRING='\"$(MOD_RADIUS_VERSION)\"' -c mod_auth_radius.c
 
 ######################################################################
 #
 #  Check a distribution out of the source tree, and make a tar file.
 #
 dist:
-	tar -cf mod_auth_radius-${VERSION}.tar mod_auth_radius-${VERSION}
-	rm -rf mod_auth_radius-${VERSION}
+	tar -cf mod_auth_radius-${MOD_RADIUS_VERSION}.tar mod_auth_radius-${MOD_RADIUS_VERSION}
+	rm -rf mod_auth_radius-${MOD_RADIUS_VERSION}
 
 ######################################################################
 #
 #  Clean up everything.
 #
 clean:
-	rm -f *~ *.o mod_auth_radius-${VERSION}.tar
+	rm -f *~ *.o mod_auth_radius-${MOD_RADIUS_VERSION}.tar
 	rm -rf .libs/
