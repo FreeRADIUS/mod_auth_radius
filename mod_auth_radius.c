@@ -47,9 +47,6 @@
  * Supercomputing Applications, University of Illinois, Urbana-Champaign.
  * For more information on the Apache Group and the Apache HTTP server
  * project, please see <http://www.apache.org/>.
- *
- *
- *  CVS $Id$
  */
 #include <stdint.h>
 #include <netdb.h>
