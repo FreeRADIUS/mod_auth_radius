@@ -56,7 +56,7 @@ install:
 endif
 
 mod_auth_radius.o: mod_auth_radius.c
-	apxs -Wall -a -DMOD_RADIUS_AUTH_VERSION_STRING='\"$(MOD_RADIUS_VERSION)\"' -c $<
+	@apxs -Wall -a -DMOD_RADIUS_AUTH_VERSION_STRING='\"$(MOD_RADIUS_VERSION)\"' -c $<
 
 ######################################################################
 #
