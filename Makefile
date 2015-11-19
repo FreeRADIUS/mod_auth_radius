@@ -48,4 +48,5 @@ dist:
 #  Clean up everything.
 #
 clean:
-	@rm -f *~ *.o mod_auth_radius-${VERSION}.tar
+	rm -f *~ *.o mod_auth_radius-${VERSION}.tar
+	rm -rf .libs/
