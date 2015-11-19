@@ -2,7 +2,7 @@
   ===============
 
   1.6.0  Reformat code, strip out support for Apache < 2.4.  If this is
-         required still required, submit patches to add support via
+         still required, submit patches to add support via
          preprocessor macros.  We will no longer be maintaining per
          version copies of mod_auth_radius.c.
 
