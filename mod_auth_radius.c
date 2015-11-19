@@ -1425,11 +1425,40 @@ static const authn_provider radius_authentication_provider = {
 	NULL
 };
 
+/*
+ * Registering the version of mod_auth_radius
+ *
+ * e.g:
+ *
+ * [jpereira@jpereira-desktop mod_auth_radius.git]$ curl -v http://localhost 2>&1 | grep "Server:"
+ * < Server: Apache/2.4.17 mod_auth_radius/1.6.1
+ * [jpereira@jpereira-desktop mod_auth_radius.git]$
+ */
+static int radius_hook_init(apr_pool_t *pconf,
+                            apr_pool_t *mp_log,
+                            apr_pool_t *mp_temp,
+                            server_rec *s) {
+	char package[32];
+
+	/* Setup module version information. */
+#ifdef MOD_RADIUS_AUTH_VERSION_STRING
+	snprintf(package, sizeof(package), "mod_auth_radius/%s", MOD_RADIUS_AUTH_VERSION_STRING);
+#else
+	strcpy(package, "mod_auth_radius");
+#endif
+
+	ap_add_version_component(pconf, package);
+
+	return OK;
+}
+
 static void register_hooks(apr_pool_t *p)
 {
 	static const char *const aszPost[] = { "mod_authz_user.c", NULL };
 
 	ap_register_provider(p, AUTHN_PROVIDER_GROUP, "radius", "0", &radius_authentication_provider);
+
+	ap_hook_post_config(radius_hook_init, NULL, NULL, APR_HOOK_MIDDLE);
 
 #ifdef AP_AUTH_INTERNAL_PER_CONF
 	ap_hook_check_access(basic_auth,
