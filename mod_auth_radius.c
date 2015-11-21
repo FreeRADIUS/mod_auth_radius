@@ -1194,7 +1194,7 @@ static int radius_hook_init(apr_pool_t *pconf,
                             apr_pool_t *mp_log,
                             apr_pool_t *mp_temp,
                             server_rec *s) {
-	char package[32];
+	char package[48]; /* e.g: mod_auth_radius/<version>[-git-<crc>] */
 
 	/* Setup module version information. */
 #ifdef MOD_RADIUS_AUTH_VERSION_STRING
