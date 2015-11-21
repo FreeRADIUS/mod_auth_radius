@@ -15,7 +15,6 @@ MOD_RADIUS_MINOR_VERSION = $(shell cat VERSION | cut -f2 -d.)
 MOD_RADIUS_INCRM_VERSION = $(shell cat VERSION | cut -f3 -d.)
 MOD_RADIUS_VERSION = $(MOD_RADIUS_MAJOR_VERSION).$(MOD_RADIUS_MINOR_VERSION).$(MOD_RADIUS_INCRM_VERSION)
 
-GIT_BRANCH = $(shell git rev-parse --abbrev-ref HEAD)
 GIT_COMMIT = $(shell git log --pretty=format:'%h' -n 1)
 
 ifneq ($(GIT_COMMIT), '')
