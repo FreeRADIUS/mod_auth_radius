@@ -1,0 +1,60 @@
+#!/usr/bin/make -f
+#export DH_VERBOSE=1
+tmp := $(CURDIR)/debian/libapache2-mod-auth-radius
+
+build: patch build-stamp
+
+build-stamp:
+	dh_testdir
+	make
+
+patch:
+#	if [ ! -f patch-stamp ]; then \
+#	 patch -p1 < debian/patches/something.diff && \
+#	 touch patch-stamp; \
+#	fi
+
+unpatch:
+#	if [ -f patch-stamp ]; then \
+#	 patch -Rp1 < debian/patches/something.diff && \
+#	 rm -f patch-stamp; \
+#	fi
+
+clean: unpatch real-clean
+real-clean:
+	dh_testdir
+	dh_testroot
+	$(MAKE) clean
+	dh_clean .libs/mod_auth_radius.so
+
+install: build
+	dh_testdir
+	dh_testroot
+	dh_prep
+	dh_installdirs
+	dh_installdirs usr/lib/apache2/modules etc/apache2/mods-available
+	cp -a debian/auth_radius.load $(tmp)/etc/apache2/mods-available/auth_radius.load
+	install -p -m 644 .libs/mod_auth_radius.so $(tmp)/usr/lib/apache2/modules/mod_auth_radius.so
+
+binary-indep:
+	#nothing to do
+
+# Build architecture-dependent files here.
+binary-arch: build install
+	dh_testdir
+	dh_testroot
+	dh_installchangelogs ChangeLog
+	dh_installdocs README.asciidoc
+	dh_installexamples htaccess httpd.conf
+	dh_strip
+	dh_compress 
+	dh_fixperms
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+binary: binary-indep binary-arch 
+.PHONY: build clean binary-arch binary-indep binary install patch unpatch
+

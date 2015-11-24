@@ -1,0 +1,1 @@
+LoadModule radius_auth_module /usr/lib/apache2/modules/mod_auth_radius.so
