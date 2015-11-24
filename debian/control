@@ -1,0 +1,15 @@
+Source: libapache2-mod-auth-radius
+Maintainer: Jorge Pereira <jpereiran@gmail.com>
+Section: web
+Priority: optional
+Standards-Version: 3.9.6
+Build-Depends: debhelper (>= 9), apache2-dev | apache2-threaded-dev, libssl-dev
+Homepage: http://www.freeradius.org/
+
+Package: libapache2-mod-auth-radius
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Suggests: freeradius-server, freeradius-utils, apache2
+Description: Apache 2.x module for RADIUS authentication
+ mod_auth_radius is an Apache 2.x module for authenticating users
+ against information stored in a RADIUS server.

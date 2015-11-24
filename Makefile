@@ -83,3 +83,21 @@ dist:
 clean:
 	@rm -f *~ *.o *.la *.so mod_auth_radius-${MOD_RADIUS_VERSION}.tar
 	@rm -rf .libs/
+
+######################################################################
+#
+#   Debian package.
+#
+
+# high-level targets
+.PHONY: dist-check
+dist-check: debian/changelog
+	@if [ "`head -n 1 debian/changelog | sed 's/.*(//; s/).*$$//g'`" != "$(MOD_RADIUS_VERSION_STRING)" ]; then \
+		echo debian/changelog needs to be updated; \
+		exit 1; \
+	fi
+
+.PHONY: deb
+deb:
+	MOD_RADIUS_VERSION_STRING="$(MOD_RADIUS_VERSION_STRING)" fakeroot dpkg-buildpackage -b -uc
+
