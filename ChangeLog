@@ -1,60 +1,24 @@
-  Version History
-  ===============
+libapache2-mod-auth-radius 2.0.0 Sat 28 Nov 2015 23:27:59 EDT urgency=mediu
+	Feature improvements
 
-  1.6.0  Reformat code, strip out support for Apache < 2.4.  If this is
-         still required, submit patches to add support via
-         preprocessor macros.  We will no longer be maintaining per
-         version copies of mod_auth_radius.c.
+	Bug fixes
 
-  1.5.4  Support for retries from John Lines <john.lines@integris.co.uk>
-         Port to Apache 2.0 by Harrie Hazewinkel <harrie@mod-snmp.com>
+libapache2-mod-auth-radius 1.6.1 Thu 19 Nov 2015 15:00:00 EDT urgency=mediu
+	Feature improvements
+	* Added capabilite to show the version (http header Server)
+	* Added debian build package
 
-  1.5.3 Bug fix from Bryan Stansell <bryan@stansell.org>, to set
-        the right data element for the AddRadiusCookieValid configuration
-    item.
+	Bug fixes
 
-  1.5.2 Updates for NAS-Identifier and NAS-IP-Address, based on ideas
-        from Adrian Hosey <ahosey@systhug.com>.  The NAS-Identifier is
-    the virtual server host name, and the NAS-IP-Address is the
-    IP address of the base server.
+libapache2-mod-auth-radius 1.6.0 Wed 18 Nov 2015 11:00:00 EDT urgency=mediu
+	Feature improvements
+	* No warnings
+	* Adding the 'AuthRadiusDebug' option
+	* Update README.asciidoc
+	* Need to be root to install
+	* Formatting
+	* Strip out support for 1.x 2.2.x, add travis test file
+	* Added travis support
 
-    Also integrated code from http://www.wede.de/sw/mod_auth_radius/
-        which had forked form this one after v1.3.3.
-
-  1.5.1 Quick release, for bug found by f.garosi@usl7.toscana.it.
-
-  1.5.0 Don't stat() proxy requests.
-
-  1.3.3 Another minor bug fix and configuration hints for Apache 1.3.x
-        Thanks to Hiroshi MIZOGUCHI <mizoguti@screen.co.jp>.
-
-  1.3.2 Fixed a bug which sometimes caused a SEGV in debugging mode.
-        Thanks to Tomi Leppikangas <tomilepp@ousrvr2.oulu.fi> for
-        pointing it out.
-
-  1.3.1 (minor) Added more error output on failed response
-
-  1.3.0 Fixed for Apache 1.3.0
-
-  1.2.5 Corrected typo in sscanf
-
-  1.2.4 Added support for debugging, so people can see what's going
-        on during the authentication process.  Define DEBUG_RADIUS
-        in the code below to enable debugging.
-
-  1.2.3 Corrected some problems with normal username/password
-        authentication and re-loads.
-
-  1.2.2: Cleaned up usage of IP addresses
-         return failure on unknown RADIUS response code.
-
-  1.2.1: Finalized challenge/response & tested it
-
-  1.2 : Cookies are expired on authentication failure.
-        Add to r->err_headers_out, NOT r->headers_out.
-
-  1.1 : Bug fixes ("forever" is one month, not 12 minutes)
-        Added proper error outputs
-
-  1.0 : Initial version.
-
+	Bug fixes
+	* Fixing a wrong REMOTE_NAME

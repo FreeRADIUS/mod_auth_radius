@@ -412,36 +412,36 @@ static const char *cookie_set_timeout(cmd_parms *cmd,
 /* Table of which command does what */
 static command_rec auth_cmds[] = {
 	AP_INIT_TAKE23("AddRadiusAuth", radius_server_add,
-		       NULL, RSRC_CONF,
-		       "per-server configuration for RADIUS server name:port, shared secret, and optional timeout:retries"),
+		NULL, RSRC_CONF,
+		"per-server configuration for RADIUS server name:port, shared secret, and optional timeout:retries"),
 
 	AP_INIT_TAKE1("AuthRadiusBindAddress", bind_address_set,
-		      NULL, RSRC_CONF,
-		      "per-server binding local socket to this local IP address. RADIUS requests will be sent *from* this IP address."),
+		NULL, RSRC_CONF,
+		"per-server binding local socket to this local IP address. RADIUS requests will be sent *from* this IP address."),
 
 	AP_INIT_TAKE1("AddRadiusCookieValid", cookie_set_timeout,
-		      NULL, RSRC_CONF,
-		      "per-server time in minutes for which the returned cookie is valid. After this time, authentication will be requested again. Use '0' for forever."),
+		NULL, RSRC_CONF,
+		"per-server time in minutes for which the returned cookie is valid. After this time, authentication will be requested again. Use '0' for forever."),
 
 	AP_INIT_TAKE1("AddRadiusCallingStationID", ap_set_string_slot,
-		      (void *)APR_OFFSETOF(radius_dir_config_rec_t, calling_station_id), OR_AUTHCFG,
-		      "per-directory custom value for the calling station ID attribute. If unset, default is to use the client's remote IP address."),
+		(void *)APR_OFFSETOF(radius_dir_config_rec_t, calling_station_id), OR_AUTHCFG,
+		"per-directory custom value for the calling station ID attribute. If unset, default is to use the client's remote IP address."),
 
 	AP_INIT_FLAG("AuthRadiusAuthoritative", ap_set_flag_slot,
-		     (void *)APR_OFFSETOF(radius_dir_config_rec_t, authoritative), OR_AUTHCFG,
-		     "per-directory access on failed authentication. If set to 'no', then access control is passed along to lower modules on failed authentication."),
+		(void *)APR_OFFSETOF(radius_dir_config_rec_t, authoritative), OR_AUTHCFG,
+		"per-directory access on failed authentication. If set to 'no', then access control is passed along to lower modules on failed authentication."),
 
 	AP_INIT_TAKE1("AuthRadiusCookieValid", ap_set_int_slot,
-		      (void *)APR_OFFSETOF(radius_dir_config_rec_t, timeout), OR_AUTHCFG,
-		      "per-directory time in minutes for which the returned cookie is valid. After this time, authentication will be requested again .Use 0 for forever."),
+		(void *)APR_OFFSETOF(radius_dir_config_rec_t, timeout), OR_AUTHCFG,
+		"per-directory time in minutes for which the returned cookie is valid. After this time, authentication will be requested again .Use 0 for forever."),
 
 	AP_INIT_FLAG("AuthRadiusActive", ap_set_flag_slot,
-		     (void *)APR_OFFSETOF(radius_dir_config_rec_t, active), OR_AUTHCFG,
-		     "per-directory toggle the use of RADIUS authentication."),
+		(void *)APR_OFFSETOF(radius_dir_config_rec_t, active), OR_AUTHCFG,
+		"per-directory toggle the use of RADIUS authentication."),
 
 	AP_INIT_FLAG("AuthRadiusDebug", ap_set_flag_slot,
-		      (void *)APR_OFFSETOF(radius_dir_config_rec_t, debug_mode), OR_AUTHCFG,
-		      "Set to 'on' to enable the debug mode, all data talked will be displayed - defaults to off."),
+		(void *)APR_OFFSETOF(radius_dir_config_rec_t, debug_mode), OR_AUTHCFG,
+		"Set to 'on' to enable the debug mode, all data talked will be displayed - defaults to off."),
 
 	{ NULL }
 };
@@ -775,9 +775,7 @@ static int radius_authenticate(request_rec *r,
 	}
 
 	/* add state, if requested */
-	if (state != NULL) {
-		attribute_add(packet, RADIUS_STATE, (uint8_t *)state, strlen(state));
-	}
+	if (state != NULL) attribute_add(packet, RADIUS_STATE, (uint8_t *)state, strlen(state));
 
 	/* Now that we're done building the packet, we can send it */
 	total_length = packet->length;
