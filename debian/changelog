@@ -1,3 +1,9 @@
+libapache2-mod-auth-radius (2.0.0+git) unstable; urgency=medium
+
+  * New upstream version.
+
+ -- Jorge Pereira <jpereiran@gmail.com>  Sat, 28 Nov 2015 23:27:59 -0300
+
 libapache2-mod-auth-radius (1.6.1+git) unstable; urgency=medium
 
   * New upstream version.
