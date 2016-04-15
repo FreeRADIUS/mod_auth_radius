@@ -1007,6 +1007,8 @@ void challenge_auth_failure(request_rec *r,
 {
 	if (!*message) { /* no message to print */
 		/* note_basic_auth_failure(r); */
+		apr_table_set(r->err_headers_out, "WWW-Authenticate",
+                              apr_psprintf(r->pool, "Basic realm=\"%s\"", ap_auth_name(r)));
 	} else {            /* print our magic message */
 		apr_table_set(r->err_headers_out, "WWW-Authenticate",
 			      apr_pstrcat(r->pool, "Basic realm=\"", ap_auth_name(r), " for ", user, " '", message, "'",
