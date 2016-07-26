@@ -1167,6 +1167,9 @@ static int basic_auth(request_rec *r)
 	int res;
 	const char *sent_pw;
 
+#ifdef AP_AUTH_INTERNAL_PER_CONF
+	if (r->user == NULL) return AUTHZ_DENIED_NO_USER;
+#endif
 	/* this used to say just if ((res=...)), which relied on the fact that
 	   OK is defined as 0, and the other states are non-0, which is then
 	   used in a typical C fashion... but it's a bad idea, really, we should
@@ -1219,7 +1222,7 @@ static void register_hooks(apr_pool_t *p)
 	ap_hook_post_config(radius_hook_init, NULL, NULL, APR_HOOK_MIDDLE);
 
 #ifdef AP_AUTH_INTERNAL_PER_CONF
-	ap_hook_check_access(basic_auth,
+	ap_hook_check_authn(basic_auth,
 			     NULL,
 			     aszPost,
 			     APR_HOOK_MIDDLE,
