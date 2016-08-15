@@ -92,6 +92,9 @@
 #define RADIUS_AUTH_UDP_PORT         1645
 #define RADIUS_PASSWORD_LEN          16
 #define RADIUS_RANDOM_VECTOR_LEN     16
+#define RADIUS_DEFAULT_WAIT          5
+#define RADIUS_DEFAULT_RETRIES       0
+#define RADIUS_DEFAULT_TIMEOUT       60
 
 /* Per-attribute structure */
 typedef struct attribute_t {
@@ -171,12 +174,12 @@ static void *radius_server_config_alloc(apr_pool_t *p, server_rec *s)
 
 	scr = (radius_server_config_rec_t *)apr_pcalloc(p, sizeof(radius_server_config_rec_t));
 	scr->radius_ip = NULL;            		/* no server yet */
-	scr->port = RADIUS_AUTH_UDP_PORT;		/* set the default port */
+	scr->port = 0;		  /* 0 uses the default value from RADIUS_AUTH_UDP_PORT */
 	scr->secret = NULL;               		/* no secret yet */
 	scr->secret_len = 0;
-	scr->wait = 5;                    		/* wait 5 sec before giving up on the packet */
-	scr->retries = 0;                 		/* no additional retries */
-	scr->timeout = 60;                		/* valid for one hour by default */
+	scr->wait = -1;                    		/* -1 uses the default value from RADIUS_DEFAULT_WAIT */
+	scr->retries = -1;                 		/* -1 uses the default value from RADIUS_DEFAULT_RETRIES */
+	scr->timeout = -1;                		/* -1 uses the default value from RADIUS_DEFAULT_TIMEOUT */
 	scr->bind_address = INADDR_ANY;
 	scr->next = NULL;
 
@@ -217,11 +220,11 @@ static void *radius_server_config_merge(apr_pool_t *p,
 		merged_config->secret_len = strlen(merged_config->secret);
 	}
 
-	merged_config->port = new_config->port;
-	merged_config->wait = new_config->wait;
-	merged_config->retries = new_config->retries;
-	merged_config->timeout = new_config->timeout;
-	merged_config->bind_address = new_config->bind_address;
+	merged_config->port = (new_config->port == 0)?old_config->port:new_config->port;
+	merged_config->wait = (new_config->wait == -1)?old_config->wait:new_config->wait;
+	merged_config->retries = (new_config->retries == -1)?old_config->retries:new_config->retries;
+	merged_config->timeout = (new_config->timeout == -1)?old_config->timeout:new_config->timeout;
+	merged_config->bind_address = (new_config->bind_address == INADDR_ANY)?old_config->bind_address:new_config->bind_address;
 
 	return (void *)merged_config;
 }
@@ -287,7 +290,7 @@ static void *radius_per_directory_config_alloc(apr_pool_t *p, char *d)
 	rec->server = NULL;             /* no valid server by default */
 	rec->active = 1;                /* active by default */
 	rec->authoritative = 1;         /* authoritative by default */
-	rec->timeout = 0;               /* let the server config decide timeouts */
+	rec->timeout = -1;              /* let the server config decide timeouts */
 	rec->calling_station_id = NULL; /* no custom value for calling station ID yet ; use default behavior */
 	rec->debug_mode = FALSE;
 
@@ -314,19 +317,19 @@ static void *radius_per_directory_config_merge(apr_pool_t *p,
 					       void *newloc_config)
 {
 	radius_dir_config_rec_t *merged_config = radius_per_directory_config_alloc(p, NULL);
-	radius_dir_config_rec_t *old_configig = (radius_dir_config_rec_t *)parent_config;
+	radius_dir_config_rec_t *old_config = (radius_dir_config_rec_t *)parent_config;
 	radius_dir_config_rec_t *new_config = (radius_dir_config_rec_t *)newloc_config;
 	void *result = NULL;
 
 	result = (new_config->calling_station_id == NULL) ?
-		old_configig->calling_station_id : new_config->calling_station_id;
+		old_config->calling_station_id : new_config->calling_station_id;
 	if (result != NULL) {
 		merged_config->calling_station_id = apr_pstrdup(p, (char *)result); /* make a copy */
 	}
 
 	merged_config->active = new_config->active;
 	merged_config->authoritative = new_config->authoritative;
-	merged_config->timeout = new_config->timeout;
+	merged_config->timeout = (new_config->timeout==-1)?old_config->timeout:new_config->timeout;
 	merged_config->debug_mode = new_config->debug_mode;
 
 	return (void *)merged_config;
@@ -344,9 +347,6 @@ static const char *radius_server_add(cmd_parms *cmd,
 	char *p;
 
 	scr = ap_get_module_config(cmd->server->module_config, &radius_auth_module);
-
-	/* allocate and look up the RADIUS server's IP address */
-	scr->radius_ip = (struct in_addr *)apr_pcalloc(cmd->pool, sizeof(struct in_addr));
 
 	/* Check to see if there's a port in the server name */
 	if ((p = strchr(server, ':')) != NULL) {
@@ -681,7 +681,7 @@ static int radius_authenticate(request_rec *r,
 	socklen_t salen;
 	int total_length;
 	fd_set set;
-	int retries = scr->retries;
+	int retries = (scr->retries == -1)?RADIUS_DEFAULT_RETRIES:scr->retries;
 	struct timeval tv;
 	int rcode = -1;
 	struct in_addr *ip_addr;
@@ -787,10 +787,10 @@ static int radius_authenticate(request_rec *r,
 	memset((char *)sin, '\0', sizeof(saremote));
 	sin->sin_family = AF_INET;
 	sin->sin_addr.s_addr = scr->radius_ip->s_addr;
-	sin->sin_port = htons(scr->port);
+	sin->sin_port = htons((scr->port == -1)?RADIUS_AUTH_UDP_PORT:scr->port);
 
 	RADLOG_DEBUG(r->server, "Sending packet on %s:%i",
-		     inet_ntoa(*scr->radius_ip), scr->port);
+		     inet_ntoa(*scr->radius_ip), (scr->port == -1)?RADIUS_AUTH_UDP_PORT:scr->port);
 
 	while (retries >= 0) {
 		if (sendto(sockfd, (char *)packet, total_length, 0,
@@ -802,7 +802,7 @@ static int radius_authenticate(request_rec *r,
 		wait_again:
 		/* Wait for the response, and verify it. */
 		salen = sizeof(saremote);
-		tv.tv_sec = scr->wait;    /* wait for the specified time */
+		tv.tv_sec = (scr->wait == -1)?RADIUS_DEFAULT_WAIT:scr->wait;    /* wait for the specified time */
 		tv.tv_usec = 0;
 
 		FD_ZERO(&set);        /* clear out the set */
@@ -833,7 +833,7 @@ static int radius_authenticate(request_rec *r,
 	 */
 	if (rcode == 0) {
 		RADLOG_DEBUG(r->server, "RADIUS server %s failed to respond within %d seconds after each of %d retries",
-			     inet_ntoa(*scr->radius_ip), scr->wait, scr->retries);
+			     inet_ntoa(*scr->radius_ip), (scr->wait == -1)?RADIUS_DEFAULT_WAIT:scr->wait, (scr->retries == -1)?RADIUS_DEFAULT_RETRIES:scr->retries);
 		return FALSE;
 	}
 
@@ -1120,14 +1120,15 @@ int basic_authentication_common(request_rec *r,
 		return HTTP_UNAUTHORIZED;
 	}
 
-	min = scr->timeout;      /* the server config is authoritative */
-	if (scr->timeout == 0) { /* except that zero means forever */
-		min = 24 * 30 * 60;      /* expire in one month (that's forever!) */
+	if (rec->timeout == -1) { /* if we let the server choose */
+		min = (scr->timeout == -1)?RADIUS_DEFAULT_TIMEOUT:scr->timeout;      /* the server config is authoritative */
+	} else {
+		min = rec->timeout;     /* use the directory config */
 	}
 
-	if ((rec->timeout != 0) &&  /* if we don't let the server choose */
-	    (rec->timeout < min)) { /* and we're more restrictive than the server */
-		min = rec->timeout;     /* use the directory config */
+ 	/* except that zero means forever */
+	if (min == 0) {
+		min = 24 * 30 * 60;      /* expire in one month (that's forever!) */
 	}
 
 	expires = time(NULL) + (min * 60);
