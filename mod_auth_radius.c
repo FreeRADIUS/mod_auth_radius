@@ -73,7 +73,7 @@
 #if AP_SERVER_MAJORVERSION_NUMBER >= 2 && AP_SERVER_MINORVERSION_NUMBER >= 4
   #define client_ip_get(_r) (_r->useragent_ip)
 #else
-  #define client_ip_get(_r) (_r->connection->remote_ip)
+  #define client_ip_get(_r) (_r->remote_ip)
 #endif
 
 #define RADLOG_DEBUG(srv, fmt, ...) ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_DEBUG, 0, srv, fmt,  ## __VA_ARGS__)
