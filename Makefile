@@ -29,7 +29,7 @@ endif
 #  the module.
 #
 
-ifeq ($(which apxs), '')
+ifeq ($(which apxs2), '')
 all:
 	@echo Can\'t find apxs, assuming this module will be built with apache
 	@echo
@@ -62,11 +62,11 @@ all: mod_auth_radius.o
 
 .PHONY: install
 install:
-	@apxs -i -a mod_auth_radius.la
+	@apxs2 -i -a mod_auth_radius.la
 endif
 
 mod_auth_radius.o: mod_auth_radius.c
-	@apxs -Wall -DMOD_RADIUS_AUTH_VERSION_STRING='\"$(MOD_RADIUS_VERSION_STRING)\"' -c $<
+	@apxs2 -Wall -DMOD_RADIUS_AUTH_VERSION_STRING='\"$(MOD_RADIUS_VERSION_STRING)\"' -c $<
 
 ######################################################################
 #
