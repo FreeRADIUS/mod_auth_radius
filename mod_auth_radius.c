@@ -972,6 +972,14 @@ static int password_check(request_rec *r,
 
 		/* Copy magic state message to the state */
 		strcpy(server_state, APACHE_RADIUS_MAGIC_STATE);
+
+		/*
+		 *	Sanitize state to ASCII
+		 */
+		for (p = a_state->data, p < (a_state->data + a_state->length); p++) {
+			if (p > 0x7f) p -= 0x80;
+			if (p < 'A') p += 'A';
+		}
 		radcpy(server_state + sizeof(APACHE_RADIUS_MAGIC_STATE) - 1, a_state);
 
 		/* Copy the Reply-Message back to the caller : do CR/LF smashing */
