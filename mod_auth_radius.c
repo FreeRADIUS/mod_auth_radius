@@ -616,14 +616,14 @@ static void cookie_add(request_rec *r,
 	char *new_cookie = apr_pcalloc(r->pool, COOKIE_SIZE); /* so it'll stick around */
 
 	if (expires != 0) {
-		char buffer[1024];
+		char buffer[COOKIE_SIZE];
 
 		strftime(buffer, sizeof(buffer), "%a %d-%b-%Y %H:%M:%S %Z",
 			 gmtime(&expires));
-		apr_snprintf(new_cookie, 1024, "%s=%s; path=/; expires=%s;",
+		apr_snprintf(new_cookie, COOKIE_SIZE, "%s=%s; path=/; expires=%s;",
 			     cookie_name, cookie, buffer);
 	} else {
-		apr_snprintf(new_cookie, 1024,
+		apr_snprintf(new_cookie, COOKIE_SIZE,
 			     "%s=%s; path=/; expires=Wed, 01-Oct-97 01:01:01 GMT;",
 			     cookie_name, cookie);
 	}
