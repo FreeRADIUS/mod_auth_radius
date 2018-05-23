@@ -976,7 +976,7 @@ static int password_check(request_rec *r,
 		/*
 		 *	Sanitize state to ASCII
 		 */
-		for (p = a_state->data, p < (a_state->data + a_state->length); p++) {
+		for (p = a_state->data; p < (a_state->data + a_state->length); p++) {
 			if (p > 0x7f) p -= 0x80;
 			if (p < 'A') p += 'A';
 		}
