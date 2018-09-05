@@ -5,7 +5,7 @@ compiler:
 before_install:
   - $CC --version
   - sudo apt-get update -qq
-  - sudo apt-get -y -qq install apache2-dev libapr1-dev libaprutil1-dev dh-autoreconf devscripts
+  - sudo apt-get -y -qq install apache2 apache2-bin apache2-dev libapr1-dev libaprutil1-dev dh-autoreconf devscripts
   - sudo dpkg-query -L apache2-dev
   - sudo dpkg -s apache2-dev | grep 'Version'
 script:
