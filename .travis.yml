@@ -5,10 +5,9 @@ compiler:
 before_install:
   - $CC --version
   - sudo apt-get update -qq
-  - sudo apt-get -y -qq install apache2-threaded-dev libapr1-dev libaprutil1-dev dh-autoreconf devscripts
-  - sudo dpkg-query -L apache2-threaded-dev
-  - sudo dpkg -s apache2-threaded-dev | grep 'Version'
-  - sudo ln -fs /usr/bin/apxs2 /usr/bin/apxs
+  - sudo apt-get -y -qq install apache2-dev libapr1-dev libaprutil1-dev dh-autoreconf devscripts
+  - sudo dpkg-query -L apache2-dev
+  - sudo dpkg -s apache2-dev | grep 'Version'
 script:
   - sudo apxs2 -Werror -Wall -i -a -c mod_auth_radius.c
   - sudo make deb
