@@ -957,6 +957,7 @@ static int password_check(request_rec *r,
 		time_t expires = time(NULL) + 120; /* state expires in two minutes */
 		char server_state[256];
 		char *p;
+		uint8_t *q;
 
 		if (((a_state = attribute_find_by_num(packet, RADIUS_STATE)) == NULL) ||
 		    ((a_reply = attribute_find_by_num(packet, RADIUS_REPLY_MESSAGE)) == NULL)) {
@@ -976,9 +977,9 @@ static int password_check(request_rec *r,
 		/*
 		 *	Sanitize state to ASCII
 		 */
-		for (p = a_state->data; p < (a_state->data + a_state->length); p++) {
-			if (p > 0x7f) p -= 0x80;
-			if (p < 'A') p += 'A';
+		for (q = a_state->data; q < (a_state->data + a_state->length); q++) {
+			if (*q > 0x7f) *q -= 0x80;
+			if (*q < 'A') *q += 'A';
 		}
 		radcpy(server_state + sizeof(APACHE_RADIUS_MAGIC_STATE) - 1, a_state);
 
