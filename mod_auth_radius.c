@@ -85,11 +85,7 @@
                   memcpy(STRING, ATTR->data, len); \
                   (STRING)[len] = 0;} while (0)
 
-/*
-  RFC 2138 says that this port number is wrong, but everyone's using it.
-  Use " AddRadiusAuth server:port secret " to change the port manually.
-  */
-#define RADIUS_AUTH_UDP_PORT         1645
+#define RADIUS_AUTH_UDP_PORT         1812
 #define RADIUS_PASSWORD_LEN          16
 #define RADIUS_RANDOM_VECTOR_LEN     16
 #define RADIUS_DEFAULT_WAIT          5
